@@ -70,9 +70,7 @@ namespace asionet
             if(!ec && n == sizeof(resp->m_header))
             {
                 if(resp->m_header.m_size > 0) {
-                    std::cout << "resizing body to " << resp->m_header.m_size << "\n";
                     resp->m_body.resize(resp->m_header.m_size);
-                    std::cout << "body is now " << resp->m_body.size() << " bytes\n";
                     m_socket.read_some(asio::buffer(resp->m_body.data(), resp->m_body.size()), ec);
                 } 
             }
