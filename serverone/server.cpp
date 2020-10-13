@@ -3,11 +3,13 @@
 #include <asioserver.hpp>
 #include <asioqueue.hpp>
 #include <map>
+#include <iomanip>
 
 struct server
 {
     enum class MsgTypes: uint32_t
     {
+        Ping,
         FireBullet,
         MovePlayer
     };
@@ -46,8 +48,29 @@ private:
     asio::io_service                                m_ios; 
     asionet::protqueue<asionet::message<MsgTypes>>  m_replies;
     std::unique_ptr<interface>                      m_intf;
-
+ 
     std::map<MsgTypes, apifunc> m_apis = {
+        { MsgTypes::Ping, [this](sess s, asionet::message<MsgTypes>& m) 
+                                {
+                                        std::chrono::system_clock::time_point ts;
+
+                                        m >> ts;
+                                        auto t = std::chrono::system_clock::to_time_t(ts);
+                                        auto tm = *std::localtime(&t);
+                                        auto [reply, iter] = m_replies.create_empty_inplace();
+                                        reply.m_header.m_id = m.m_header.m_id;
+                                        reply << ts;
+                                        auto& replies = m_replies;
+                                        auto& msg = reply;
+                                        s->write(reply, 
+                                                 [&replies, &msg](sess s) -> bool {
+                                                    replies.slow_erase(msg);
+                                                    return true;
+                                                 }
+                                        );
+
+                                }
+        },
         { MsgTypes::FireBullet, [this](sess s, asionet::message<MsgTypes>& m) 
                                 {
                                         float x, y;
@@ -61,12 +84,12 @@ private:
                                         reply.m_header.m_id = m.m_header.m_id;
                                         reply << "Fired OK!";
                                         auto& replies = m_replies;
-                                        auto i = iter;
+                                        auto& msg = reply;
                                         s->write(reply, 
-                                                 [&replies, i](sess s) -> bool {
-                                                     std::cout << "FireBullet reply sent\n";
-                                                     replies.erase(i);
-                                                     return true;
+                                                 [&replies, &msg](sess s) -> bool {
+                                                    std::cout << "FireBullet reply sent\n";
+                                                    replies.slow_erase(msg);
+                                                    return true;
                                                  }
                                         );
 
@@ -85,12 +108,12 @@ private:
                                         reply.m_header.m_id = m.m_header.m_id;
                                         reply << "Moved Player OK!";
                                         auto& replies = m_replies;
-                                        auto i = iter;
+                                        auto& msg = reply;
                                         s->write(reply, 
-                                                 [&replies, i](sess s) -> bool {
-                                                     std::cout << "MovePlayer reply sent\n";
-                                                     replies.erase(i);
-                                                     return true;
+                                                 [&replies, &msg](sess s) -> bool {
+                                                    std::cout << "MovePlayer reply sent\n";
+                                                    replies.slow_erase(msg);
+                                                    return true;
                                                  }
                                         );
                                 }
