@@ -24,7 +24,7 @@ namespace asionet
 
         message(message_header<T>& hdr)
         {
-            std::memcpy(&m_header, &hdr, sizeof(m_header));
+            m_header = hdr;
             m_body.resize(0);
         }
 
