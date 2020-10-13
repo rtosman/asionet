@@ -42,7 +42,7 @@ namespace asionet
             return m_queue.empty();
         }
 
-        [[nodiscard]] size_t count()
+        [[nodiscard]] size_t size()
         {
             std::scoped_lock lock(m_queue_mutex);
             return m_queue.size();
@@ -72,7 +72,17 @@ namespace asionet
 
         typename std::deque<T>::iterator erase(typename std::deque<T>::const_iterator i)
         {
+            std::scoped_lock lock(m_queue_mutex);
             return m_queue.erase(i);
+        }
+
+        void slow_erase(const T& item)
+        {
+            std::scoped_lock lock(m_queue_mutex);
+            for(auto i = m_queue.begin(); i != m_queue.end(); )
+            {
+                (&(*i) == &item)? i = m_queue.erase(i):++i;
+            }
         }
 
         [[nodiscard]] std::tuple<T&, std::deque<T>::const_iterator>
