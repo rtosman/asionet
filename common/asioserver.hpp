@@ -54,7 +54,7 @@ namespace asionet
         void write(message<T>& msg, wr_cb cb)
         {
             asio::async_write(m_socket,
-                              asio::buffer((uint8_t*)&msg, sizeof(message_header<T>)),
+                              asio::buffer((uint8_t*)&msg, sizeof(msg.m_header)),
                               std::bind(&session::handle_body,
                                         shared_from_this(),
                                         msg.m_body.data(),
@@ -148,6 +148,7 @@ namespace asionet
 
         virtual ~server_interface()
         {
+            std::cout << "server_interface destroyed\n";
         }
 
         void handle_accept(std::shared_ptr<session<T>> existing,
@@ -158,6 +159,10 @@ namespace asionet
                 if (m_connect_cb(existing))
                 {
                     existing->start();
+                }
+                else
+                {
+                    remove_session(existing);
                 }
                 prime();
             }
@@ -183,23 +188,30 @@ namespace asionet
             return m_msgs;
         }
 
-    protected:
-        asio::io_service&   m_ios;
-        uint16_t            m_port;
-        new_connection_notification_cb  m_connect_cb;
-        msg_ready_notification_cb       m_msg_ready_cb;
-        disconnect_notification_cb      m_disconnect_cb;
-
     private:
+        asio::io_service&                           m_ios;
+        uint16_t                                    m_port;
+        new_connection_notification_cb              m_connect_cb;
+        msg_ready_notification_cb                   m_msg_ready_cb;
+        disconnect_notification_cb                  m_disconnect_cb;
         protqueue<owned_message<T>>                 m_msgs;
         asio::ip::tcp::socket                       m_socket;
         std::list<std::shared_ptr<session<T>>>      m_sessions;
         asio::ip::tcp::acceptor                     m_acceptor;
 
+
+        void remove_session(std::shared_ptr<session<T>> s)
+        {
+            for(auto i = m_sessions.begin(); i != m_sessions.end(); )
+            {
+                ((*i).get() == s.get())? i = m_sessions.erase(i):++i;
+            }
+            std::cout << "# of sessions: " << m_sessions.size() << "\n";
+        }
+
         void read_body(std::shared_ptr<session<T>> s)
         {
             asionet::owned_message owned_msg(s->get_hdr(), s);
-            std::cout << "body size: " << owned_msg.m_msg.m_header.m_size << "\n";
             owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
             s->socket().read_some(asio::buffer(owned_msg.m_msg.body().data(),
                                                owned_msg.m_msg.body().size())
@@ -212,6 +224,9 @@ namespace asionet
         void disconnect(std::shared_ptr<session<T>> s)
         {
             m_disconnect_cb(s);
+            remove_session(s);
+            // following line to be uncommented with c++20
+            // std::erase_if(m_sessions, [&s](std::shared_ptr<session<T>> e) { return e.get() == s.get(); });
         }
 
         void prime()
