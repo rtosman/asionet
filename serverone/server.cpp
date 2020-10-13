@@ -21,7 +21,7 @@ struct server
                                 [this](sess s)
                                 {
                                     std::cout << "New connection\n";
-                                    return true;
+                                    return s->socket().remote_endpoint().address().is_loopback();
                                 },
                                 [this]() 
                                 {
@@ -35,7 +35,6 @@ struct server
                             )
               )
     {
-        m_ios.run();
     }
 
     bool run()
@@ -56,7 +55,7 @@ private:
                                         m >> y >> x;
                                         std::cout << "Fire Bullet ("
                                             << x << ":" << y
-                                            << ")\n";
+                                            << ") from: " << s->socket().remote_endpoint() << "\n";
 
                                         auto [reply, iter] = m_replies.create_empty_inplace();
                                         reply.m_header.m_id = m.m_header.m_id;
@@ -80,7 +79,7 @@ private:
                                         m >> y >> x;
                                         std::cout << "Move Player ("
                                             << x << ":" << y
-                                            << ")\n";
+                                            << ") from: " << s->socket().remote_endpoint() << "\n";
 
                                         auto [reply, iter] = m_replies.create_empty_inplace();
                                         reply.m_header.m_id = m.m_header.m_id;
