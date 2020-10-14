@@ -5,13 +5,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <numeric>
-
-enum class MsgTypes: uint32_t
-{
-    Ping,
-    FireBullet,
-    MovePlayer
-};
+#include "one.hpp"
 
 class Client: public asionet::client_interface<MsgTypes>
 {

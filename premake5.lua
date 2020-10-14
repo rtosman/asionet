@@ -4,6 +4,7 @@ workspace "ASIO"
    includedirs { 
       "E:/Users/Rennie Allen/source/include/asio-1.18.0/include",
       "%{prj.location}/common",
+      "%{prj.location}/one"
    }
    language "C++"
    cppdialect "C++17" 

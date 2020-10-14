@@ -4,18 +4,13 @@
 #include <asioqueue.hpp>
 #include <map>
 #include <iomanip>
+#include "one.hpp"
 
 struct server
 {
-    enum class MsgTypes: uint32_t
-    {
-        Ping,
-        FireBullet,
-        MovePlayer
-    };
-    
+
     using sess = std::shared_ptr<asionet::session<MsgTypes>>;
-    using interface = asionet::server_interface<server::MsgTypes>;
+    using interface = asionet::server_interface<MsgTypes>;
     using apifunc = std::function<void(sess s, asionet::message<MsgTypes>&)>;
 
     server(uint16_t port):
@@ -28,7 +23,7 @@ struct server
                                 [this]() 
                                 {
                                     auto m = m_intf->incoming().pop_front();
-                                    m_apis[m.m_msg.api()](m.m_remote, m.m_msg);
+                                    m_apis[clamp_msg_types(m.m_msg.api())](m.m_remote, m.m_msg);
                                 },
                                 [this](sess s)
                                 {
@@ -50,6 +45,11 @@ private:
     std::unique_ptr<interface>                      m_intf;
  
     std::map<MsgTypes, apifunc> m_apis = {
+        { MsgTypes::Invalid, [this](sess s, asionet::message<MsgTypes>& m) 
+                                {
+                                    std::cerr << "Invalid message received\n";
+                                }
+        },
         { MsgTypes::Ping, [this](sess s, asionet::message<MsgTypes>& m) 
                                 {
                                         // for ping, just send back the message as-is for
