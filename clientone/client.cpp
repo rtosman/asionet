@@ -10,6 +10,12 @@
 class Client: public asionet::client_interface<MsgTypes>
 {
 public:
+    void acknowledge_connection()
+    {
+        asionet::message<MsgTypes> msg;
+        msg.m_header.m_id = MsgTypes::Connected;
+        send(msg);
+    }
 
     void ping(std::chrono::system_clock::time_point t)
     {
@@ -48,18 +54,17 @@ int main(int argc, char** argv)
     bool key[] = { false, false, false, false };
     bool old_key[] = {false, false, false, false};
     
-    if(!c.connect(argv[1], atoi(argv[2])))
-    {
-        std::cout << "Could not connect to: " << argv[1] << " on port: " << argv[2] << "\n";
-        exit(1);
-    }
+    c.connect(argv[1], atoi(argv[2]));
 
-    std::cout << "Connected to: " << argv[1] << " on port: " << argv[2] << "\n";
+    std::vector<uint32_t>       ping_times;
+    bool                        flood_ping{ false };
+    bool                        ping_in_transit{false};
+    bool                        quit{false};
+    enum { ConnectionRequested, 
+           ConnectionMade,
+           ConnectionWaiting, 
+           ConnectionComplete}  state{ConnectionRequested};
 
-    std::vector<uint32_t>   ping_times;
-    bool                    flood_ping{ false };
-    bool                    ping_in_transit{false};
-    bool                    quit{false};
     while(!quit) {
         if(GetForegroundWindow() == GetConsoleWindow()) 
         {
@@ -69,28 +74,40 @@ int main(int argc, char** argv)
             key[Quit] = GetAsyncKeyState('Q') & 0x8000;
         }
 
-        if(key[Ping] && !old_key[Ping])
+        switch(state)
         {
-            flood_ping = !flood_ping;
+            case ConnectionRequested:
+                if(c.is_connected()) state = ConnectionMade;
+            break;
+            case ConnectionMade:
+                c.acknowledge_connection();
+                state = ConnectionWaiting;
+            break;
+            case ConnectionWaiting:
+            break;
+            case ConnectionComplete:
+                if(key[Ping] && !old_key[Ping])
+                {
+                    flood_ping = !flood_ping;
+                }
+                if(key[Fire] && !old_key[Fire])
+                {
+                    c.fire_bullet(2.0f, 5.0f);
+                }
+                if(key[Move] && !old_key[Move])
+                {
+                    c.move_player(12.0f, 52.0f);
+                }
+            break;
         }
 
-        if(key[Fire] && !old_key[Fire])
+        if((key[Quit] && !old_key[Quit])) 
         {
-            c.fire_bullet(2.0f, 5.0f);
-        }
-
-        if(key[Move] && !old_key[Move])
-        {
-            c.move_player(12.0f, 52.0f);
-        }
-
-        if((key[Quit] && !old_key[Quit]) || !c.is_connected()) 
-        {
-            std::cout << "Quiting!\n";
+            std::cout << "Quitting!\n";
             quit = true;
         }
 
-        for(auto i=0; i < sizeof(key); ++i) old_key[i] = key[i];
+        for(auto i=0; i < sizeof(key)/sizeof(key[0]); ++i) old_key[i] = key[i];
 
         if (c.is_connected())
         {
@@ -106,6 +123,10 @@ int main(int argc, char** argv)
 
                 switch (msg.m_header.m_id)
                 {
+                case MsgTypes::Connected:
+                    std::cout << "Connected to: " << argv[1] << " on port: " << argv[2] << "\n";
+                    state = ConnectionComplete;
+                break;
                 case MsgTypes::Ping:
                 {
                     std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
@@ -140,10 +161,6 @@ int main(int argc, char** argv)
                 break;
                 }
             }
-        }
-        else 
-        {
-            std::cerr << "Not connected to: " << argv[1] << "\n";
         }
     }    
 
