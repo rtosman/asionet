@@ -15,7 +15,7 @@ struct server
 
     server(uint16_t port):
         m_intf(std::make_unique<interface>(m_ios, port, 
-                                [this](sess s)
+                                [](sess s)
                                 {
                                     std::cout << "New connection\n";
                                     return s->socket().remote_endpoint().address().is_loopback();
@@ -25,7 +25,7 @@ struct server
                                     auto m = m_intf->incoming().pop_front();
                                     m_apis[clamp_msg_types(m.m_msg.api())](m.m_remote, m.m_msg);
                                 },
-                                [this](sess s)
+                                [](sess s)
                                 {
                                     std::cout << "Connection dropped\n";
                                 }
@@ -37,6 +37,8 @@ struct server
     bool run()
     {
         m_ios.run();
+
+        return true;
     }
 
 private:
@@ -45,7 +47,7 @@ private:
     std::unique_ptr<interface>                      m_intf;
  
     std::map<MsgTypes, apifunc> m_apis = {
-        { MsgTypes::Invalid, [this](sess s, asionet::message<MsgTypes>& m) 
+        { MsgTypes::Invalid, [](sess s, asionet::message<MsgTypes>& m) 
                                 {
                                     std::cerr << "Invalid message received\n";
                                 }
@@ -66,7 +68,7 @@ private:
         },
         { MsgTypes::FireBullet, [this](sess s, asionet::message<MsgTypes>& m) 
                                 {
-                                        float x, y;
+                                        float x{0}, y{0};
 
                                         m >> y >> x;
                                         std::cout << "Fire Bullet ("
@@ -88,7 +90,7 @@ private:
         },
         { MsgTypes::MovePlayer, [this](sess s, asionet::message<MsgTypes>& m) 
                                 {
-                                        double x, y;
+                                        double x{0}, y{0};
 
                                         m >> y >> x;
                                         std::cout << "Move Player ("

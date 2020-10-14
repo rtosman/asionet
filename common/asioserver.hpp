@@ -44,7 +44,7 @@ namespace asionet
                                                   sizeof(m_data)
                                                  ),
                                      std::bind(&session::handle_read, 
-                                               shared_from_this(),
+                                               std::enable_shared_from_this<session<T>>::shared_from_this(),
                                                std::placeholders::_1,
                                                std::placeholders::_2
                                         )
@@ -56,7 +56,7 @@ namespace asionet
             asio::async_write(m_socket,
                               asio::buffer((uint8_t*)&msg, sizeof(msg.m_header)),
                               std::bind(&session::handle_body,
-                                        shared_from_this(),
+                                        std::enable_shared_from_this<session<T>>::shared_from_this(),
                                         msg.m_body.data(),
                                         msg.m_body.size(),
                                         cb,
@@ -72,11 +72,11 @@ namespace asionet
         {
             if (!ec)
             {
-                m_mcb(shared_from_this());
+                m_mcb(std::enable_shared_from_this<session<T>>::shared_from_this());
             }
             else
             {
-                m_ecb(shared_from_this());
+                m_ecb(std::enable_shared_from_this<session<T>>::shared_from_this());
             }
         }
 
@@ -88,7 +88,7 @@ namespace asionet
                 asio::async_write(m_socket,
                                 asio::buffer(data,len), 
                                 std::bind(&session::handle_write_completion,
-                                            shared_from_this(),
+                                            std::enable_shared_from_this<session<T>>::shared_from_this(),
                                             cb,
                                             std::placeholders::_1
                                             )
@@ -100,7 +100,7 @@ namespace asionet
         {
             if (!error)
             {
-                if(wcb(shared_from_this())) 
+                if(wcb(std::enable_shared_from_this<session<T>>::shared_from_this()))
                 {
                     m_socket.async_read_some(asio::buffer((uint8_t*)&m_data, sizeof(m_data)),
                                             std::bind(&session::handle_read, this,

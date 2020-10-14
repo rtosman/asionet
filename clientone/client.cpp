@@ -112,7 +112,7 @@ int main(int argc, char** argv)
                     std::chrono::system_clock::time_point ts;
                     msg >> ts;
                     auto deltaus = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<double>(now - ts));
-                    ping_times.push_back(deltaus.count());
+                    ping_times.push_back(static_cast<uint32_t>(deltaus.count()));
                     if(ping_times.size() >= 1000)
                     {
                         std::cout << "Ping round trip average = " 
@@ -135,8 +135,10 @@ int main(int argc, char** argv)
                     std::cout << "response id = " << (uint32_t)msg.m_header.m_id << " body is [" << (char*)msg.m_body.data() << "]\n";
                 }
                 break;
+                case MsgTypes::Invalid:
+                case MsgTypes::NumEnumElements:
+                break;
                 }
-
             }
         }
         else 

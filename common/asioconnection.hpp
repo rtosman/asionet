@@ -83,8 +83,8 @@ namespace asionet
 */
     private:
         asio::io_context&               m_context;
-        protqueue<owned_message<T>>&    m_inbound;
         asio::ip::tcp::socket           m_socket;
+        protqueue<owned_message<T>>&    m_inbound;
         
         message<T>              m_temp;
         protqueue<message<T>>   m_outbound;
@@ -114,7 +114,7 @@ namespace asionet
                         {
                             // ...it didnt, so we are done with this message. Remove it from 
                             // the outgoing message queue
-                            m_outbound.pop_front();
+                            auto temp = m_outbound.pop_front();
 
                             // If the queue is not empty, there are more messages to send, so
                             // make this happen by issuing the task to send the next header.
@@ -150,7 +150,7 @@ namespace asionet
 						{
 							// Sending was successful, so we are done with the message
 							// and remove it from the queue
-							m_outbound.pop_front();
+							auto temp = m_outbound.pop_front();
 
 							// If the queue still has messages in it, then issue the task to 
 							// send the next messages' header.
