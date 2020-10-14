@@ -11,7 +11,8 @@ workspace "ASIO"
    filter "system:windows"
       toolset('clang')
       defines { "_WIN32_WINNT=0x0601" }
-
+      platforms { "Win32", "Win64" }
+      
 project "ServerOne"
    kind "ConsoleApp"
    targetdir "bin/%{cfg.buildcfg}"
