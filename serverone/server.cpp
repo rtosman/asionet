@@ -17,7 +17,7 @@ struct server
         m_intf(std::make_unique<interface>(m_ios, port, 
                                 [](sess s)
                                 {
-                                    std::cout << "New connection\n";
+                                    std::cout << "New connection request\n";
                                     return s->socket().remote_endpoint().address().is_loopback();
                                 },
                                 [this]() 
@@ -52,6 +52,19 @@ private:
                                     std::cerr << "Invalid message received\n";
                                 }
         },
+        { MsgTypes::Connected, [this](sess s, asionet::message<MsgTypes>& m) 
+                                {
+                                    std::cerr << "Client is connected\n";
+                                    auto& reply = m_replies.create_inplace(m);
+                                    auto& replies = m_replies;
+                                    s->write(reply, 
+                                            [&replies, &reply](sess s) -> void 
+                                            {
+                                                replies.slow_erase(reply);
+                                            }
+                                        );
+                                }
+        },
         { MsgTypes::Ping, [this](sess s, asionet::message<MsgTypes>& m) 
                                 {
                                         // for ping, just send back the message as-is for
@@ -59,9 +72,9 @@ private:
                                         auto& reply = m_replies.create_inplace(m);
                                         auto& replies = m_replies;
                                         s->write(reply, 
-                                                 [&replies, &reply](sess s) -> bool {
+                                                 [&replies, &reply](sess s) -> void 
+                                                 {
                                                     replies.slow_erase(reply);
-                                                    return true;
                                                  }
                                         );
                                 }
@@ -80,10 +93,10 @@ private:
                                         reply << "Fired OK!";
                                         auto& replies = m_replies;
                                         s->write(reply, 
-                                                 [&replies, &reply](sess s) -> bool {
+                                                 [&replies, &reply](sess s) -> void 
+                                                 {
                                                     std::cout << "FireBullet reply sent\n";
                                                     replies.slow_erase(reply);
-                                                    return true;
                                                  }
                                         );
                                 }
@@ -102,10 +115,9 @@ private:
                                         reply << "Moved Player OK!";
                                         auto& replies = m_replies;
                                         s->write(reply, 
-                                                 [&replies, &reply](sess s) -> bool {
+                                                 [&replies, &reply](sess s) -> void {
                                                     std::cout << "MovePlayer reply sent\n";
                                                     replies.slow_erase(reply);
-                                                    return true;
                                                  }
                                         );
                                 }
