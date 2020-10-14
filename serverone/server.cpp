@@ -52,23 +52,16 @@ private:
     std::map<MsgTypes, apifunc> m_apis = {
         { MsgTypes::Ping, [this](sess s, asionet::message<MsgTypes>& m) 
                                 {
-                                        std::chrono::system_clock::time_point ts;
-
-                                        m >> ts;
-                                        auto t = std::chrono::system_clock::to_time_t(ts);
-                                        auto tm = *std::localtime(&t);
-                                        auto [reply, iter] = m_replies.create_empty_inplace();
-                                        reply.m_header.m_id = m.m_header.m_id;
-                                        reply << ts;
+                                        // for ping, just send back the message as-is for
+                                        // minimal latency
+                                        auto& reply = m_replies.create_inplace(m);
                                         auto& replies = m_replies;
-                                        auto& msg = reply;
                                         s->write(reply, 
-                                                 [&replies, &msg](sess s) -> bool {
-                                                    replies.slow_erase(msg);
+                                                 [&replies, &reply](sess s) -> bool {
+                                                    replies.slow_erase(reply);
                                                     return true;
                                                  }
                                         );
-
                                 }
         },
         { MsgTypes::FireBullet, [this](sess s, asionet::message<MsgTypes>& m) 
@@ -80,19 +73,17 @@ private:
                                             << x << ":" << y
                                             << ") from: " << s->socket().remote_endpoint() << "\n";
 
-                                        auto [reply, iter] = m_replies.create_empty_inplace();
+                                        auto& reply = m_replies.create_empty_inplace();
                                         reply.m_header.m_id = m.m_header.m_id;
                                         reply << "Fired OK!";
                                         auto& replies = m_replies;
-                                        auto& msg = reply;
                                         s->write(reply, 
-                                                 [&replies, &msg](sess s) -> bool {
+                                                 [&replies, &reply](sess s) -> bool {
                                                     std::cout << "FireBullet reply sent\n";
-                                                    replies.slow_erase(msg);
+                                                    replies.slow_erase(reply);
                                                     return true;
                                                  }
                                         );
-
                                 }
         },
         { MsgTypes::MovePlayer, [this](sess s, asionet::message<MsgTypes>& m) 
@@ -104,15 +95,14 @@ private:
                                             << x << ":" << y
                                             << ") from: " << s->socket().remote_endpoint() << "\n";
 
-                                        auto [reply, iter] = m_replies.create_empty_inplace();
+                                        auto& reply = m_replies.create_empty_inplace();
                                         reply.m_header.m_id = m.m_header.m_id;
                                         reply << "Moved Player OK!";
                                         auto& replies = m_replies;
-                                        auto& msg = reply;
                                         s->write(reply, 
-                                                 [&replies, &msg](sess s) -> bool {
+                                                 [&replies, &reply](sess s) -> bool {
                                                     std::cout << "MovePlayer reply sent\n";
-                                                    replies.slow_erase(msg);
+                                                    replies.slow_erase(reply);
                                                     return true;
                                                  }
                                         );
