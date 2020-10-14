@@ -93,6 +93,13 @@ namespace asionet
 
         }
 
+        owned_message(message<T>& msg, std::shared_ptr<session<T>> remote):
+                            m_remote(remote),
+                            m_msg(msg)
+        {
+
+        }
+
         friend std::ostream& operator<<(std::ostream& os, const owned_message<T>& msg)
         {
             os << msg.msg;
