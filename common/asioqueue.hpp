@@ -85,13 +85,16 @@ namespace asionet
             }
         }
 
-        [[nodiscard]] std::tuple<T&, std::deque<T>::const_iterator>
-                  create_empty_inplace()
+        [[nodiscard]] T& create_empty_inplace()
         {
             std::scoped_lock lock(m_queue_mutex);
-            T& reply = m_queue.emplace_back();
-            auto iter = m_queue.end() - 1;
-            return std::make_tuple(std::ref(reply), iter);
+            return m_queue.emplace_back();
+        }
+
+        [[nodiscard]] T& create_inplace(const T& item)
+        {
+            std::scoped_lock lock(m_queue_mutex);
+            return m_queue.emplace_back(item);
         }
 
     protected:
