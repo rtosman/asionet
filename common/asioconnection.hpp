@@ -28,6 +28,7 @@ namespace asionet
                 {
                     if (!ec)
                     {
+                        m_established = true;
                         handle_rd_header();
                     }
                 });
@@ -41,7 +42,7 @@ namespace asionet
 
         [[nodiscard]] bool is_connected() const
         {
-            return m_socket.is_open();
+            return m_established;
         };
 
         void send(const message<T>& msg)
@@ -63,24 +64,6 @@ namespace asionet
                 });
         }
 
-/*
-        [[nodiscard]] std::shared_ptr<message<T>> response()
-        {
-            asio::error_code            ec;
-            std::shared_ptr<message<T>> resp(std::make_shared<message<T>>());
-
-            size_t n = m_socket.read_some(asio::buffer(&resp->m_header, sizeof(resp->m_header)), ec);
-            if(!ec && n == sizeof(resp->m_header))
-            {
-                if(resp->m_header.m_size > 0) {
-                    resp->m_body.resize(resp->m_header.m_size);
-                    m_socket.read_some(asio::buffer(resp->m_body.data(), resp->m_body.size()), ec);
-                } 
-            }
-
-            return resp;
-        }
-*/
     private:
         asio::io_context&               m_context;
         asio::ip::tcp::socket           m_socket;
@@ -88,7 +71,8 @@ namespace asionet
         
         message<T>              m_temp;
         protqueue<message<T>>   m_outbound;
-
+        bool                    m_established{false};
+        
         void handle_wr_header()
         {
             // If this function is called, we know the outgoing message queue must have 
@@ -130,7 +114,6 @@ namespace asionet
                         // for now simply assume the connection has died by closing the
                         // socket. When a future attempt to write to this client fails due
                         // to the closed socket, it will be tidied up.
-                        std::cout << "[" << (uint32_t)m_outbound.front().m_header.m_id << "] Write Header Fail.\n";
                         m_socket.close();
                     }
                 });
@@ -162,7 +145,6 @@ namespace asionet
 						else
 						{
 							// Sending failed, see WriteHeader() equivalent for description :P
-                            std::cout << "[" << (uint32_t)m_outbound.front().m_header.m_id << "] Write Body Fail.\n";
 							m_socket.close();
 						}
 					});
@@ -203,7 +185,6 @@ namespace asionet
 						{
 							// Reading form the client went wrong, most likely a disconnect
 							// has occurred. Close the socket and let the system tidy it up later.
-							std::cout << "[" << (uint32_t)m_temp.m_header.m_id << "] Read Header Fail.\n";
 							m_socket.close();
 						}
 					});
@@ -229,7 +210,6 @@ namespace asionet
 						else
 						{
 							// As above!
-							std::cout << "[" << (uint32_t)m_temp.m_header.m_id << "] Read Body Fail.\n";
 							m_socket.close();
 						}
 					});
