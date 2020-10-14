@@ -5,6 +5,7 @@
 enum class MsgTypes: uint32_t
 {
     Invalid,
+    Connected,
     Ping,
     FireBullet,
     MovePlayer,
