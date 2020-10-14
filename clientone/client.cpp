@@ -3,6 +3,8 @@
 #include <asioclient.hpp>
 #include <ctime>
 #include <iomanip>
+#include <algorithm>
+#include <numeric>
 
 enum class MsgTypes: uint32_t
 {
@@ -15,81 +17,134 @@ class Client: public asionet::client_interface<MsgTypes>
 {
 public:
 
-    [[nodiscard]] bool ping(std::chrono::system_clock::time_point t)
+    void ping(std::chrono::system_clock::time_point t)
     {
         asionet::message<MsgTypes> msg;
         msg.m_header.m_id = MsgTypes::Ping;
         msg << t;
-        return m_connection->send(msg);
+        send(msg);
     }
 
-    [[nodiscard]] bool fire_bullet(float x, float y)
+    void fire_bullet(float x, float y)
     {
         asionet::message<MsgTypes> msg;
         msg.m_header.m_id = MsgTypes::FireBullet;
         msg << x << y;
-        return m_connection->send(msg);
+        send(msg);
     }
 
-    [[nodiscard]] bool move_player(double x, double y)
+    void move_player(double x, double y)
     {
         asionet::message<MsgTypes> msg;
         msg.m_header.m_id = MsgTypes::MovePlayer;
         msg << x << y;
-        return m_connection->send(msg);
+        send(msg);
     }
-
-    [[nodiscard]] std::shared_ptr<asionet::message<MsgTypes>> get_response()
-    {
-        return m_connection->response();
-    }
-};
+ };
 
 int main(int argc, char** argv)
 {
     Client c;
-    if (c.connect(argv[1], atoi(argv[2])))
+
+    bool key[] = { false, false, false, false };
+    bool old_key[] = {false, false, false, false};
+    
+    if(!c.connect(argv[1], atoi(argv[2])))
     {
-        std::cout << "Connected to: " << argv[1] << " on port: " << argv[2] << "\n";
-        if (!c.ping(std::chrono::system_clock::now()))
+        std::cout << "Could not connect to: " << argv[1] << " on port: " << argv[2] << "\n";
+        exit(1);
+    }
+
+    std::cout << "Connected to: " << argv[1] << " on port: " << argv[2] << "\n";
+
+    std::vector<uint32_t>   ping_times;
+    bool                    flood_ping{ false };
+    bool                    pinging{false};
+    bool                    quit{false};
+    while(!quit) {
+        if(GetForegroundWindow() == GetConsoleWindow()) 
         {
-            std::cout << "Could not ping\n";
-        }
-        else 
-        {
-            std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-            std::chrono::system_clock::time_point ts;
-            auto response = c.get_response();
-            *response >> ts;
-            auto deltaus = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<double>(now - ts));
-            std::cout << "Ping round trip = " << deltaus.count() << "us\n";
-        }
-        if (!c.fire_bullet(2.0f, 5.0f)) 
-        {
-            std::cout << "Could not fire bullet\n";
-        }
-        else 
-        {
-            auto response = c.get_response();
-            std::cout << "response id = " << (uint32_t)response->m_header.m_id << " body is [" << (char*)response->m_body.data() << "]\n";
+            key[0] = GetAsyncKeyState('P') & 0x8000;
+            key[1] = GetAsyncKeyState('F') & 0x8000;
+            key[2] = GetAsyncKeyState('M') & 0x8000;
+            key[3] = GetAsyncKeyState('Q') & 0x8000;
         }
 
-        if (!c.move_player(80.0, 45.0)) 
+        if(key[0] && !old_key[0])
         {
-            std::cout << "Could not move player\n";
+            flood_ping = !flood_ping;
         }
-        else
+
+        if(key[1] && !old_key[1])
         {
-            auto response = c.get_response();
-            std::cout << "response id = " << (uint32_t)response->m_header.m_id << " body is [" << (char*)response->m_body.data() << "]\n";
+            c.fire_bullet(2.0f, 5.0f);
         }
-    }
-    else 
-    {
-        std::cerr << "Could not connect to: " << argv[1] << "\n";
-    }
-    
-    system("pause");
+
+        if(key[2] && !old_key[2])
+        {
+            c.move_player(12.0f, 52.0f);
+        }
+
+        if((key[3] && !old_key[3]) || !c.is_connected()) 
+        {
+            std::cout << "Quiting!\n";
+            quit = true;
+        }
+
+        for(auto i=0; i < sizeof(key); ++i) old_key[i] = key[i];
+
+        if (c.is_connected())
+        {
+            if (flood_ping && !pinging)
+            {
+                c.ping(std::chrono::system_clock::now());
+                pinging = true;
+            }
+
+            if (!c.incoming().empty())
+            {
+                auto msg = c.incoming().pop_front().m_msg;
+
+                switch (msg.m_header.m_id)
+                {
+                case MsgTypes::Ping:
+                {
+                    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+                    std::chrono::system_clock::time_point ts;
+                    msg >> ts;
+                    auto deltaus = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<double>(now - ts));
+                    ping_times.push_back(deltaus.count());
+                    if(ping_times.size() >= 1000)
+                    {
+                        std::cout << "Ping round trip average = " 
+                                  << (std::accumulate(ping_times.begin(), ping_times.end(), 0)/ping_times.size()) 
+                                  << "us (calculated over " << ping_times.size() << " samples)\n";
+                        ping_times.clear();
+                    }
+                    pinging = false;
+                }
+                break;
+
+                case MsgTypes::FireBullet:
+                {
+                    std::cout << "response id = " << (uint32_t)msg.m_header.m_id << " body is [" << (char*)msg.m_body.data() << "]\n";
+                }
+                break;
+
+                case MsgTypes::MovePlayer:
+                {
+                    std::cout << "response id = " << (uint32_t)msg.m_header.m_id << " body is [" << (char*)msg.m_body.data() << "]\n";
+                }
+                break;
+                }
+
+            }
+        }
+        else 
+        {
+            std::cerr << "Not connected to: " << argv[1] << "\n";
+        }
+    }    
 
     return 0;
 }

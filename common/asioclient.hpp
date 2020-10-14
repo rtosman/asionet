@@ -10,9 +10,8 @@ namespace asionet
     template <typename T>
     struct client_interface
     {
-        client_interface():m_socket(m_context)
+        client_interface()
         {
-
         }
 
         virtual ~client_interface()
@@ -23,34 +22,17 @@ namespace asionet
         [[nodiscard]] bool connect(const std::string& server, 
                                    const uint16_t port)
         {
-            asio::io_service    ios;
             asio::error_code    ec;
 
             try 
             {
-                m_connection = std::make_unique<connection<T>>(m_context, m_msgs);
+                asio::ip::tcp::resolver resolver(m_context);
+                asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(server, std::to_string(port));
 
-                asio::ip::tcp::resolver::query resolver_query(server,
-                                                              std::to_string(port),
-                                                              asio::ip::tcp::resolver::query::numeric_service
-                                                             );
+                m_connection = std::make_unique<connection<T>>(m_context, asio::ip::tcp::socket(m_context), m_msgs);
 
-                asio::ip::tcp::resolver resolver(ios);
+                m_connection->connect(endpoints);
 
-                m_endpoints = resolver.resolve(resolver_query, ec);
-
-                if (ec) {
-                    std::cerr << "Failed to resolve a DNS name."
-                        << "Error code = " << ec.value() 
-                        << ". Message = " << ec.message();
-                    return false;
-                }
-
-                if (!m_connection->connect(m_endpoints->endpoint()))
-                {
-                    return false;
-
-                }
                 m_thrctxt = std::thread([this]() { m_context.run(); });
             }
             catch(std::exception& e)
@@ -86,20 +68,22 @@ namespace asionet
                 return false;
         }
 
-        [[nodiscard]] protqueue<message<T>>& incoming()
+        void send(message<T>& msg)
+        {
+            m_connection->send(msg);
+        }
+
+        [[nodiscard]] protqueue<owned_message<T>>& incoming()
         {
             return m_msgs;
         }
 
-        protected:
+        private:
             asio::io_context                m_context;
             std::thread                     m_thrctxt;
-            asio::ip::tcp::socket           m_socket;
-            std::unique_ptr<connection<T>>  m_connection;
 
-        private:
-            protqueue<message<T>>               m_msgs;
-            asio::ip::tcp::resolver::iterator   m_endpoints; 
+            std::unique_ptr<connection<T>>  m_connection;
+            protqueue<owned_message<T>>     m_msgs;
     };
 }
 
