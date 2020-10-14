@@ -15,8 +15,9 @@ namespace asionet
     struct session: public std::enable_shared_from_this<session<T>>
     {
         using msg_cb = std::function<void(std::shared_ptr<session<T>>)>;
-        using wr_cb = std::function<bool(std::shared_ptr<session<T>>)>;
+        using wr_cb = std::function<void(std::shared_ptr<session<T>>)>;
         using err_cb = std::function<void(std::shared_ptr<session<T>>)>;
+        using enable_shared = std::enable_shared_from_this<session<T>>;
 
         session(asio::io_service& ios, msg_cb mcb, err_cb ecb)
             : m_socket(ios), m_mcb(mcb), m_ecb(ecb)
@@ -25,7 +26,6 @@ namespace asionet
 
         ~session()
         {
-            std::cout << "Session killed\n";
         }
 
         asio::ip::tcp::socket& socket()
@@ -44,7 +44,7 @@ namespace asionet
                                                   sizeof(m_data)
                                                  ),
                                      std::bind(&session::handle_read, 
-                                               std::enable_shared_from_this<session<T>>::shared_from_this(),
+                                               enable_shared::shared_from_this(),
                                                std::placeholders::_1,
                                                std::placeholders::_2
                                         )
@@ -56,7 +56,7 @@ namespace asionet
             asio::async_write(m_socket,
                               asio::buffer((uint8_t*)&msg, sizeof(msg.m_header)),
                               std::bind(&session::handle_body,
-                                        std::enable_shared_from_this<session<T>>::shared_from_this(),
+                                        enable_shared::shared_from_this(),
                                         msg.m_body.data(),
                                         msg.m_body.size(),
                                         cb,
@@ -72,11 +72,12 @@ namespace asionet
         {
             if (!ec)
             {
-                m_mcb(std::enable_shared_from_this<session<T>>::shared_from_this());
+                m_mcb(enable_shared::shared_from_this());
+                start(); // we've handled one message, start again
             }
             else
             {
-                m_ecb(std::enable_shared_from_this<session<T>>::shared_from_this());
+                m_ecb(enable_shared::shared_from_this());
             }
         }
 
@@ -88,7 +89,7 @@ namespace asionet
                 asio::async_write(m_socket,
                                 asio::buffer(data,len), 
                                 std::bind(&session::handle_write_completion,
-                                            std::enable_shared_from_this<session<T>>::shared_from_this(),
+                                            enable_shared::shared_from_this(),
                                             cb,
                                             std::placeholders::_1
                                             )
@@ -100,15 +101,7 @@ namespace asionet
         {
             if (!error)
             {
-                if(wcb(std::enable_shared_from_this<session<T>>::shared_from_this()))
-                {
-                    m_socket.async_read_some(asio::buffer((uint8_t*)&m_data, sizeof(m_data)),
-                                            std::bind(&session::handle_read, this,
-                                                    std::placeholders::_1,
-                                                    std::placeholders::_2
-                                                    )
-                                            );
-                }
+                wcb(std::enable_shared_from_this<session<T>>::shared_from_this());
             }
         }
 
@@ -148,7 +141,6 @@ namespace asionet
 
         virtual ~server_interface()
         {
-            std::cout << "server_interface destroyed\n";
         }
 
         void handle_accept(std::shared_ptr<session<T>> existing,
@@ -168,16 +160,9 @@ namespace asionet
             }
             else
             {
-                m_sessions.remove_if([this, &existing](std::shared_ptr<session<T>>& elem) 
+                m_sessions.remove_if([&existing](std::shared_ptr<session<T>>& elem) 
                     {
-                        bool rm = elem.get() == existing.get();
-
-                        if (rm)
-                        {
-                            m_disconnect_cb(existing);
-                        }
-
-                        return rm;
+                        return elem.get() == existing.get();
                     }
                 );
             }
@@ -206,7 +191,6 @@ namespace asionet
             {
                 ((*i).get() == s.get())? i = m_sessions.erase(i):++i;
             }
-            std::cout << "# of sessions: " << m_sessions.size() << "\n";
         }
 
         void read_body(std::shared_ptr<session<T>> s)
@@ -225,6 +209,7 @@ namespace asionet
         {
             m_disconnect_cb(s);
             remove_session(s);
+            prime();
             // following line to be uncommented with c++20
             // std::erase_if(m_sessions, [&s](std::shared_ptr<session<T>> e) { return e.get() == s.get(); });
         }
