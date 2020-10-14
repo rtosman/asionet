@@ -46,6 +46,11 @@ int main(int argc, char** argv)
 {
     Client c;
 
+    const int Ping=0;
+    const int Fire=1;
+    const int Move=2;
+    const int Quit=3;
+
     bool key[] = { false, false, false, false };
     bool old_key[] = {false, false, false, false};
     
@@ -59,33 +64,33 @@ int main(int argc, char** argv)
 
     std::vector<uint32_t>   ping_times;
     bool                    flood_ping{ false };
-    bool                    pinging{false};
+    bool                    ping_in_transit{false};
     bool                    quit{false};
     while(!quit) {
         if(GetForegroundWindow() == GetConsoleWindow()) 
         {
-            key[0] = GetAsyncKeyState('P') & 0x8000;
-            key[1] = GetAsyncKeyState('F') & 0x8000;
-            key[2] = GetAsyncKeyState('M') & 0x8000;
-            key[3] = GetAsyncKeyState('Q') & 0x8000;
+            key[Ping] = GetAsyncKeyState('P') & 0x8000;
+            key[Fire] = GetAsyncKeyState('F') & 0x8000;
+            key[Move] = GetAsyncKeyState('M') & 0x8000;
+            key[Quit] = GetAsyncKeyState('Q') & 0x8000;
         }
 
-        if(key[0] && !old_key[0])
+        if(key[Ping] && !old_key[Ping])
         {
             flood_ping = !flood_ping;
         }
 
-        if(key[1] && !old_key[1])
+        if(key[Fire] && !old_key[Fire])
         {
             c.fire_bullet(2.0f, 5.0f);
         }
 
-        if(key[2] && !old_key[2])
+        if(key[Move] && !old_key[Move])
         {
             c.move_player(12.0f, 52.0f);
         }
 
-        if((key[3] && !old_key[3]) || !c.is_connected()) 
+        if((key[Quit] && !old_key[Quit]) || !c.is_connected()) 
         {
             std::cout << "Quiting!\n";
             quit = true;
@@ -95,10 +100,10 @@ int main(int argc, char** argv)
 
         if (c.is_connected())
         {
-            if (flood_ping && !pinging)
+            if (flood_ping && !ping_in_transit)
             {
                 c.ping(std::chrono::system_clock::now());
-                pinging = true;
+                ping_in_transit = true;
             }
 
             if (!c.incoming().empty())
@@ -121,7 +126,7 @@ int main(int argc, char** argv)
                                   << "us (calculated over " << ping_times.size() << " samples)\n";
                         ping_times.clear();
                     }
-                    pinging = false;
+                    ping_in_transit = false;
                 }
                 break;
 
