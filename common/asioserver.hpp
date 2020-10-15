@@ -241,8 +241,6 @@ namespace asionet
         {
             m_disconnect_cb(s);
             remove_session(s);
-            // must reprime any time a session as been destroyed
-            prime();
             // following line to be uncommented with c++20
             // std::erase_if(m_sessions, [&s](std::shared_ptr<session<T>> e) { return e.get() == s.get(); });
         }
