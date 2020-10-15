@@ -203,7 +203,7 @@ namespace asionet
                                               )
                                  );
 
-            m_msgs.push_back(owned_msg);
+            m_msgs.create_inplace(owned_msg);
             m_msg_ready_cb();
         }
 
@@ -228,7 +228,7 @@ namespace asionet
         {
             if(!ec)
             {
-                m_msgs.push_back(*owned_msg);
+                m_msgs.create_inplace(*owned_msg);
                 m_msg_ready_cb();
             }
             else
