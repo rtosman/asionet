@@ -112,7 +112,7 @@ namespace asionet
         asionet::message_header<T>  m_data;
     };
 
-    template <typename T>
+    template <typename T, bool Async=true>
     struct server_interface
     {
         using new_connection_notification_cb = std::function<bool(std::shared_ptr<asionet::session<T>>)>;
@@ -156,6 +156,8 @@ namespace asionet
                 {
                     remove_session(existing);
                 }
+                // must re-prime any time that a session has been either consumed (start)
+                // or destroyed (remove_session)
                 prime();
             }
             else
@@ -184,7 +186,6 @@ namespace asionet
         std::list<std::shared_ptr<session<T>>>      m_sessions;
         asio::ip::tcp::acceptor                     m_acceptor;
 
-
         void remove_session(std::shared_ptr<session<T>> s)
         {
             for(auto i = m_sessions.begin(); i != m_sessions.end(); )
@@ -193,22 +194,54 @@ namespace asionet
             }
         }
 
-        void read_body(std::shared_ptr<session<T>> s)
+        void read_body_sync(std::shared_ptr<session<T>> s)
         {
             asionet::owned_message owned_msg(s->get_hdr(), s);
             owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
             s->socket().read_some(asio::buffer(owned_msg.m_msg.body().data(),
-                                               owned_msg.m_msg.body().size())
+                                               owned_msg.m_msg.body().size()
+                                              )
                                  );
 
             m_msgs.push_back(owned_msg);
             m_msg_ready_cb();
         }
 
+        void read_body_async(std::shared_ptr<session<T>> s)
+        {
+            auto owned_msg = std::make_shared<owned_message<T>>(s->get_hdr(), s); 
+            owned_msg->m_msg.body().resize(owned_msg->m_msg.m_header.m_size);
+            s->socket().async_read_some(asio::buffer(owned_msg->m_msg.body().data(),
+                                                     owned_msg->m_msg.body().size()),
+                                        std::bind(&server_interface::handle_read,
+                                                  this,
+                                                  owned_msg,
+                                                  std::placeholders::_1,
+                                                  std::placeholders::_2
+                                                )
+                                       );
+        }
+
+        void handle_read(std::shared_ptr<owned_message<T>> owned_msg,
+                         const asio::error_code& ec,
+                         size_t bytes_transferred)
+        {
+            if(!ec)
+            {
+                m_msgs.push_back(*owned_msg);
+                m_msg_ready_cb();
+            }
+            else
+            {
+                disconnect(owned_msg->m_remote);
+            }            
+        }
+
         void disconnect(std::shared_ptr<session<T>> s)
         {
             m_disconnect_cb(s);
             remove_session(s);
+            // must reprime any time a session as been destroyed
             prime();
             // following line to be uncommented with c++20
             // std::erase_if(m_sessions, [&s](std::shared_ptr<session<T>> e) { return e.get() == s.get(); });
@@ -216,15 +249,26 @@ namespace asionet
 
         void prime()
         {
-            m_sessions.push_back(std::make_shared<session<T>>(m_ios,
-                std::bind(&server_interface::read_body,
-                    this,
-                    std::placeholders::_1),
-                std::bind(&server_interface::disconnect,
-                    this,
-                    std::placeholders::_1)
-                )
-            );
+            if constexpr (Async == true)
+                m_sessions.push_back(std::make_shared<session<T>>(m_ios,
+                                     std::bind(&server_interface::read_body_async,
+                                               this,
+                                               std::placeholders::_1),
+                                     std::bind(&server_interface::disconnect,
+                                               this,
+                                               std::placeholders::_1)
+                                                                 )
+                                     );
+            else
+                m_sessions.push_back(std::make_shared<session<T>>(m_ios,
+                                     std::bind(&server_interface::read_body_sync,
+                                               this,
+                                               std::placeholders::_1),
+                                     std::bind(&server_interface::disconnect,
+                                               this,
+                                               std::placeholders::_1)
+                                                                 )
+                                    );
 
             m_acceptor.async_accept(m_sessions.back()->socket(),
                 std::bind(&server_interface::handle_accept,
