@@ -1,3 +1,5 @@
+#ifndef _ASIONET_HPP_INCLUDED
+#define _ASIONET_HPP_INCLUDED
 #include <thread>
 #include <mutex>
 #include <deque>
@@ -16,3 +18,4 @@
 #include <asio.hpp>
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
+#endif

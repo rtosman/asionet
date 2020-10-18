@@ -11,6 +11,18 @@ namespace asionet
         protqueue(const protqueue<T>&) = delete;
         ~protqueue() { clear(); }
         
+        typename std::deque<T>::const_iterator begin()
+        {
+            std::scoped_lock lock(m_queue_mutex);
+            return m_queue.begin();
+        }
+
+        typename std::deque<T>::const_iterator end()
+        {
+            std::scoped_lock lock(m_queue_mutex);
+            return m_queue.end();
+        }
+
         const T& front()
         {
             std::scoped_lock lock(m_queue_mutex);
@@ -94,7 +106,7 @@ namespace asionet
         [[nodiscard]] T& create_inplace(const T& item)
         {
             std::scoped_lock lock(m_queue_mutex);
-            return m_queue.emplace_back(item);
+            return m_queue.emplace_back(std::move(item));
         }
 
     protected:

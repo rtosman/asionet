@@ -3,138 +3,44 @@
 #include "asionet.hpp"
 #include "asioqueue.hpp"
 #include "asiomsg.hpp"
-#include "asioconnection.hpp"
+#include "asiosession.hpp"
 #include <list>
 #include <functional>
+#include <botan/rng.h>
+#include <botan/auto_rng.h>
 
 // to debug define ASIO_ENABLE_HANDLER_TRACKING when building
-namespace asionet 
+namespace asionet
 {
-
-    template <typename T>
-    struct session: public std::enable_shared_from_this<session<T>>
-    {
-        using msg_cb = std::function<void(std::shared_ptr<session<T>>)>;
-        using wr_cb = std::function<void(std::shared_ptr<session<T>>)>;
-        using err_cb = std::function<void(std::shared_ptr<session<T>>)>;
-        using enable_shared = std::enable_shared_from_this<session<T>>;
-
-        session(asio::io_service& ios, msg_cb mcb, err_cb ecb)
-            : m_socket(ios), m_mcb(mcb), m_ecb(ecb)
-        {
-        }
-
-        ~session()
-        {
-        }
-
-        asio::ip::tcp::socket& socket()
-        {
-            return m_socket;
-        }
-
-        message_header<T>& get_hdr()
-        {
-            return m_data;
-        }
-
-        void start()
-        {
-            m_socket.async_read_some(asio::buffer((uint8_t*)&m_data, 
-                                                  sizeof(m_data)
-                                                 ),
-                                     std::bind(&session::handle_read, 
-                                               enable_shared::shared_from_this(),
-                                               std::placeholders::_1,
-                                               std::placeholders::_2
-                                        )
-                                    );
-        }
-
-        void write(message<T>& msg, wr_cb cb)
-        {
-            asio::async_write(m_socket,
-                              asio::buffer((uint8_t*)&msg, sizeof(msg.m_header)),
-                              std::bind(&session::handle_body,
-                                        enable_shared::shared_from_this(),
-                                        msg.m_body.data(),
-                                        msg.m_body.size(),
-                                        cb,
-                                        std::placeholders::_1
-                                        )
-                            );
-
-        }
-
-        private:
-        void handle_read(const asio::error_code& ec,
-                         size_t bytes_transferred)
-        {
-            if (!ec)
-            {
-                m_mcb(enable_shared::shared_from_this());
-                start(); // we've handled one message, start again
-            }
-            else
-            {
-                m_ecb(enable_shared::shared_from_this());
-            }
-        }
-
-        void handle_body(uint8_t* data, size_t len, wr_cb cb, 
-                         const asio::error_code& error)
-        {
-            if (!error)
-            {
-                asio::async_write(m_socket,
-                                asio::buffer(data,len), 
-                                std::bind(&session::handle_write_completion,
-                                            enable_shared::shared_from_this(),
-                                            cb,
-                                            std::placeholders::_1
-                                            )
-                                );
-            }
-        }
-
-        void handle_write_completion(wr_cb wcb, const asio::error_code& error)
-        {
-            if (!error)
-            {
-                wcb(std::enable_shared_from_this<session<T>>::shared_from_this());
-            }
-        }
-
-    private:
-        asio::ip::tcp::socket       m_socket;
-        msg_cb                      m_mcb;
-        err_cb                      m_ecb;
-        asionet::message_header<T>  m_data;
-    };
-
-    template <typename T, bool Async=true>
+    template <typename T, bool Async=true, bool Encrypt=true>
     struct server_interface
     {
-        using new_connection_notification_cb = std::function<bool(std::shared_ptr<asionet::session<T>>)>;
+        using new_connection_notification_cb = std::function<bool(std::shared_ptr<session<T>>)>;
         using msg_ready_notification_cb = std::function<void()>;
-        using disconnect_notification_cb = std::function<void(std::shared_ptr<asionet::session<T>>)>;
+        using disconnect_notification_cb = std::function<void(std::shared_ptr<session<T>>)>;
+        using decrypt_type = std::unique_ptr<Botan::Cipher_Mode>;
 
         template <typename F1, 
                   typename F2, 
                   typename F3>
-        server_interface(asio::io_service& ios, 
+        server_interface(asio::io_context& ctxt, 
                          uint16_t port,
                          F1 connect_cb,
                          F2 msg_ready_cb,
-                         F3 disconnect_cb):
-                                m_ios(ios),
+                         F3 disconnect_cb,
+                         std::vector<uint8_t> key = Botan::hex_decode("2B7E151628AED2A6ABF7158809CF4F3C")):
+                                m_context(ctxt),
                                 m_port(port),
                                 m_connect_cb(connect_cb),
                                 m_msg_ready_cb(msg_ready_cb),
                                 m_disconnect_cb(disconnect_cb),
-                                m_socket(m_ios),
-                                m_acceptor(m_ios, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), m_port))
+                                m_socket(m_context),
+                                m_acceptor(m_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), m_port)),
+                                m_dec(Botan::Cipher_Mode::create("AES-128/CBC/PKCS7", Botan::DECRYPTION))                                
         {
+            if constexpr (Encrypt == true)
+                m_dec->set_key(key);
+
             // prime the pump
             prime();
         }
@@ -176,15 +82,21 @@ namespace asionet
         }
 
     private:
-        asio::io_service&                           m_ios;
-        uint16_t                                    m_port;
-        new_connection_notification_cb              m_connect_cb;
-        msg_ready_notification_cb                   m_msg_ready_cb;
-        disconnect_notification_cb                  m_disconnect_cb;
-        protqueue<owned_message<T>>                 m_msgs;
-        asio::ip::tcp::socket                       m_socket;
-        std::list<std::shared_ptr<session<T>>>      m_sessions;
-        asio::ip::tcp::acceptor                     m_acceptor;
+        asio::io_context&                                        m_context;
+        uint16_t                                                 m_port;
+        new_connection_notification_cb                           m_connect_cb;
+        msg_ready_notification_cb                                m_msg_ready_cb;
+        disconnect_notification_cb                               m_disconnect_cb;
+        protqueue<owned_message<T,Encrypt>>                      m_msgs;
+        asio::ip::tcp::socket                                    m_socket;
+        std::list<std::shared_ptr<session<T, Encrypt>>>          m_sessions;
+        asio::ip::tcp::acceptor                                  m_acceptor;
+        decrypt_type                                             m_dec;
+
+        uint32_t crypto_align(uint32_t size)
+        {
+            return size + (16 - (size % 16));
+        }
 
         void remove_session(std::shared_ptr<session<T>> s)
         {
@@ -196,39 +108,71 @@ namespace asionet
 
         void read_body_sync(std::shared_ptr<session<T>> s)
         {
-            asionet::owned_message owned_msg(s->get_hdr(), s);
-            owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
+            owned_message t(s->get_hdr(), s);
+            auto& owned_msg = m_msgs.create_inplace(std::move(t));
+
+            if constexpr (Encrypt == true)
+                owned_msg.m_msg.body().resize(crypto_align(owned_msg.m_msg.m_header.m_size));
+            else
+                owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
+
             s->socket().read_some(asio::buffer(owned_msg.m_msg.body().data(),
                                                owned_msg.m_msg.body().size()
                                               )
                                  );
+            if constexpr (Encrypt == true)
+            {
+                Botan::secure_vector<uint8_t> iv(&s->get_hdr().m_iv[0], 
+                                                 &s->get_hdr().m_iv[16]);
+                m_dec->start(iv);
+                m_dec->finish(owned_msg.m_msg.body());
+            }
 
-            m_msgs.create_inplace(owned_msg);
             m_msg_ready_cb();
         }
 
         void read_body_async(std::shared_ptr<session<T>> s)
         {
-            auto owned_msg = std::make_shared<owned_message<T>>(s->get_hdr(), s); 
-            owned_msg->m_msg.body().resize(owned_msg->m_msg.m_header.m_size);
-            s->socket().async_read_some(asio::buffer(owned_msg->m_msg.body().data(),
-                                                     owned_msg->m_msg.body().size()),
-                                        std::bind(&server_interface::handle_read,
-                                                  this,
-                                                  owned_msg,
-                                                  std::placeholders::_1,
-                                                  std::placeholders::_2
-                                                )
-                                       );
+            owned_message t(s->get_hdr(), s);
+            auto& owned_msg = m_msgs.create_inplace(std::move(t));
+
+            if constexpr (Encrypt == true)
+                owned_msg.m_msg.body().resize(crypto_align(owned_msg.m_msg.m_header.m_size));
+            else
+                owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
+
+            if (s->get_hdr().m_size)
+            {
+                s->socket().async_read_some(asio::buffer(owned_msg.m_msg.body().data(),
+                                            owned_msg.m_msg.body().size()),
+                                            std::bind(&server_interface::handle_read,
+                                                this,
+                                                &owned_msg,
+                                                std::placeholders::_1,
+                                                std::placeholders::_2
+                                            )
+                );
+            }
+            else
+            {
+                m_msg_ready_cb();
+            }
         }
 
-        void handle_read(std::shared_ptr<owned_message<T>> owned_msg,
+        void handle_read(owned_message<T>* owned_msg,
                          const asio::error_code& ec,
                          size_t bytes_transferred)
         {
             if(!ec)
             {
-                m_msgs.create_inplace(*owned_msg);
+                if constexpr (Encrypt == true)
+                {
+                    Botan::secure_vector<uint8_t> iv(&owned_msg->m_msg.m_header.m_iv[0], 
+                                                     &owned_msg->m_msg.m_header.m_iv[16]);
+                    m_dec->start(iv);
+                    m_dec->finish(owned_msg->m_msg.body());
+                }
+
                 m_msg_ready_cb();
             }
             else
@@ -248,7 +192,7 @@ namespace asionet
         void prime()
         {
             if constexpr (Async == true)
-                m_sessions.push_back(std::make_shared<session<T>>(m_ios,
+                m_sessions.push_back(std::make_shared<session<T>>(m_context,
                                      std::bind(&server_interface::read_body_async,
                                                this,
                                                std::placeholders::_1),
@@ -258,7 +202,7 @@ namespace asionet
                                                                  )
                                      );
             else
-                m_sessions.push_back(std::make_shared<session<T>>(m_ios,
+                m_sessions.push_back(std::make_shared<session<T>>(m_context,
                                      std::bind(&server_interface::read_body_sync,
                                                this,
                                                std::placeholders::_1),

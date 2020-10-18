@@ -1,34 +1,38 @@
 #ifndef _ASIOMSG_HPP_INCLUDED
 #define _ASIOMSG_HPP_INCLUDED
 #include "asionet.hpp"
+#include <botan/auto_rng.h>
 
 namespace asionet 
 {
-    template <typename T> 
+    template <typename T>
     struct message_header 
     {
         T           m_id{};
-        uint32_t    m_size = 0;
+        uint32_t    m_size{ 0 };
+        uint8_t     m_iv[16]{};
     };
 
-    template <typename T>
+    template <typename T, typename BodyType = Botan::secure_vector<uint8_t>>
     struct message
     {
-        message_header<T>       m_header{};
-        std::vector<uint8_t>    m_body;
+        message_header<T>               m_header{};
+        BodyType                        m_body;
 
         message()
         {
-            m_body.resize(0);
         }
 
         message(message_header<T>& hdr)
         {
             m_header = hdr;
-            m_body.resize(0);
+            if (hdr.m_size == 0)
+            {
+                blank();
+            }
         }
 
-        std::vector<uint8_t>& body()
+       BodyType& body()
         {
             return m_body;
         }
@@ -36,6 +40,11 @@ namespace asionet
         [[nodiscard]] T& api()
         {
             return m_header.m_id;
+        }
+
+        void blank()
+        {
+            m_body.resize(0);
         }
 
         friend std::ostream& operator<<(std::ostream& os, const message<T>& msg)
@@ -77,14 +86,14 @@ namespace asionet
         }
     };
 
-    template <typename T>
+    template <typename T, bool Encrypt=true>
     struct session;
 
-    template <typename T>
+    template <typename T, bool Encrypt=true>
     struct owned_message
     {
-        std::shared_ptr<session<T>> m_remote;
-        message<T>                  m_msg;
+        std::shared_ptr<session<T>>         m_remote;
+        message<T>                          m_msg;
 
         owned_message(message_header<T>& hdr, std::shared_ptr<session<T>> remote):
                             m_remote(remote),

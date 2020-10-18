@@ -5,6 +5,8 @@
 #include <map>
 #include <iomanip>
 #include "one.hpp"
+#include <chrono>
+#include <ctime>
 
 struct server
 {
@@ -14,7 +16,7 @@ struct server
     using apifunc = std::function<void(sess s, asionet::message<MsgTypes>&)>;
 
     server(uint16_t port):
-        m_intf(std::make_unique<interface>(m_ios, port, 
+        m_intf(std::make_unique<interface>(m_context, port, 
                                 [](sess s)
                                 {
                                     std::cout << "New connection request\n";
@@ -36,13 +38,13 @@ struct server
 
     bool run()
     {
-        m_ios.run();
+        m_context.run();
 
         return true;
     }
 
 private:
-    asio::io_service                                m_ios; 
+    asio::io_context                                m_context; 
     asionet::protqueue<asionet::message<MsgTypes>>  m_replies;
     std::unique_ptr<interface>                      m_intf;
  
@@ -57,6 +59,7 @@ private:
                                     std::cerr << "Client is connected\n";
                                     auto& reply = m_replies.create_inplace(m);
                                     auto& replies = m_replies;
+                                    reply.blank(); // Connected reply has no data
                                     s->write(reply, 
                                             [&replies, &reply](sess s) -> void 
                                             {

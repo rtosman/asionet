@@ -4,15 +4,21 @@ workspace "ASIO"
    includedirs { 
       "E:/Users/Rennie Allen/source/include/asio-1.18.0/include",
       "%{prj.location}/common",
-      "%{prj.location}/one"
+      "%{prj.location}/one",
+      "E:/Users/Rennie Allen/source/opensource/include/botan-2"
    }
+   libdirs {
+      "E:/Users/Rennie Allen/source/opensource/lib"
+   }
+   links { "botan" }
+
    language "C++"
    cppdialect "C++17" 
    filter "system:windows"
       toolset('clang')
       defines { "_WIN32_WINNT=0x0601" }
       platforms { "Win32", "Win64" }
-      
+
 project "ServerOne"
    kind "ConsoleApp"
    targetdir "bin/%{cfg.buildcfg}"
