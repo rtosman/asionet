@@ -9,12 +9,12 @@
 
 namespace asionet 
 {
-    template <typename T, bool Encrypt=true>
+    template <typename T, bool Encrypt=true, bool Async=true>
     struct client_interface
     {
-        using sess = std::shared_ptr<asionet::session<T>>;
+        using sess = std::shared_ptr<asionet::session<T, Encrypt>>;
         using msg_ready_notification_cb = std::function<void()>;
-        using disconnect_notification_cb = std::function<void(std::shared_ptr<session<T>>)>;
+        using disconnect_notification_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
 
         template <typename F1,
                   typename F2>
@@ -42,22 +42,21 @@ namespace asionet
                 asio::ip::tcp::resolver resolver(m_context);
                 asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(server, std::to_string(port));
 
-                if constexpr (Encrypt == true)
-                    m_session = std::make_shared<session<T>>(m_context,
+                if constexpr (Async == true)
+                    m_session = std::make_shared<session<T, Encrypt>>(m_context,
                                         std::bind(&client_interface::read_body_async,
                                                 this,
                                                 std::placeholders::_1),
                                         std::bind(&client_interface::disconnect,
-                                                this)
+                                                  this)
                                 );
                 else
-                    m_session = std::make_shared<session<T, false>>(m_context,
+                    m_session = std::make_shared<session<T, Encrypt>>(m_context,
                                      std::bind(&client_interface::read_body_sync,
                                                this,
                                                std::placeholders::_1),
                                      std::bind(&client_interface::disconnect,
-                                               this,
-                                               std::placeholders::_1)
+                                               this)
                                 );
 
                 m_session->connect(endpoints);
@@ -104,7 +103,7 @@ namespace asionet
                 });
         }
 
-        [[nodiscard]] protqueue<owned_message<T>>& incoming()
+        [[nodiscard]] protqueue<owned_message<T, Encrypt>>& incoming()
         {
             return m_msgs;
         }
@@ -114,12 +113,12 @@ namespace asionet
         msg_ready_notification_cb                               m_msg_ready_cb;
         disconnect_notification_cb                              m_disconnect_cb;
         std::thread                                             m_thrctxt;
-        std::shared_ptr<session<T>>                             m_session;
-        protqueue<owned_message<T>>                             m_msgs;
+        std::shared_ptr<session<T, Encrypt>>                    m_session;
+        protqueue<owned_message<T, Encrypt>>                    m_msgs;
 
-        void read_body_sync(std::shared_ptr<session<T>> s)
+        void read_body_sync(std::shared_ptr<session<T, Encrypt>> s)
         {
-            owned_message<message<T>> t(s->get_hdr(), s);
+            owned_message<T, Encrypt> t(s->get_hdr(), s);
             auto& owned_msg = m_msgs.create_inplace(t);
             if constexpr (Encrypt == true)
                 owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
@@ -132,17 +131,15 @@ namespace asionet
                                  );
             if constexpr (Encrypt == true)
             {
-                Botan::secure_vector<uint8_t> iv(&owned_msg.m_msg.m_header.m_iv[0],
-                                                 &owned_msg.m_msg.m_header.m_iv[16]);
-                m_dec->start(iv);
-                m_dec->finish(owned_msg.m_msg.body());
+                owned_msg.m_remote->decrypt(owned_msg);
             }
+
             m_msg_ready_cb();
         }
 
-        void read_body_async(std::shared_ptr<session<T>> s)
+        void read_body_async(std::shared_ptr<session<T, Encrypt>> s)
         {
-            owned_message t(s->get_hdr(), s);
+            owned_message<T, Encrypt> t(s->get_hdr(), s);
             auto& owned_msg=m_msgs.create_inplace(std::move(t));
             if constexpr (Encrypt == true)
                 owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
@@ -166,7 +163,7 @@ namespace asionet
             }
         }
 
-        void handle_read(owned_message<T>* owned_msg,
+        void handle_read(owned_message<T, Encrypt>* owned_msg,
                          const asio::error_code& ec,
                          size_t bytes_transferred)
         {

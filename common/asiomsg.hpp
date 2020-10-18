@@ -92,28 +92,28 @@ namespace asionet
     template <typename T, bool Encrypt=true>
     struct owned_message
     {
-        std::shared_ptr<session<T>>         m_remote;
-        message<T>                          m_msg;
+        std::shared_ptr<session<T, Encrypt>>        m_remote;
+        message<T>                                  m_msg;
 
-        owned_message(message_header<T>& hdr, std::shared_ptr<session<T>> remote):
+        owned_message(message_header<T>& hdr, std::shared_ptr<session<T, Encrypt>> remote):
                             m_remote(remote),
                             m_msg(hdr)
         {
 
         }
 
-        owned_message(message<T>& msg, std::shared_ptr<session<T>> remote):
+        owned_message(message<T>& msg, std::shared_ptr<session<T, Encrypt>> remote):
                             m_remote(remote),
                             m_msg(msg)
         {
 
         }
 
-        friend std::ostream& operator<<(std::ostream& os, const owned_message<T>& msg)
-        {
-            os << msg.msg;
-            return os;
-        }
+//        friend std::ostream& operator<<(std::ostream& os, const owned_message<T>& msg)
+//        {
+//            os << msg.msg;
+//            return os;
+//        }
     };
 }
 

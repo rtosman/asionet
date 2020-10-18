@@ -16,12 +16,12 @@ namespace asionet
     }
 
     template <typename T, bool Encrypt>
-    struct session: public std::enable_shared_from_this<session<T>>
+    struct session: public std::enable_shared_from_this<session<T, Encrypt>>
     {
-        using msg_cb = std::function<void(std::shared_ptr<session<T>>)>;
-        using wr_cb = std::function<void(std::shared_ptr<session<T>>)>;
-        using err_cb = std::function<void(std::shared_ptr<session<T>>)>;
-        using enable_shared = std::enable_shared_from_this<session<T>>;
+        using msg_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
+        using wr_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
+        using err_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
+        using enable_shared = std::enable_shared_from_this<session<T, Encrypt>>;
         using encrypt_type = std::unique_ptr<Botan::Cipher_Mode>;
         using decrypt_type = std::unique_ptr<Botan::Cipher_Mode>;
 
@@ -166,7 +166,7 @@ namespace asionet
                 }
                 else
                 {
-                    cb(std::enable_shared_from_this<session<T>>::shared_from_this());
+                    cb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this());
                 }
             }
         }
@@ -175,7 +175,7 @@ namespace asionet
         {
             if (!error)
             {
-                wcb(std::enable_shared_from_this<session<T>>::shared_from_this());
+                wcb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this());
             }
         }
 
