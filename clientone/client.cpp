@@ -10,8 +10,13 @@
 
 struct client
 {
+#if 0 // no encryption synchronous read
+    using sess = asionet::client_interface<MsgTypes, false, false>::sess;
+    using interface = asionet::client_interface<MsgTypes, false>;
+#else // encryption + async read 
     using sess = asionet::client_interface<MsgTypes>::sess;
     using interface = asionet::client_interface<MsgTypes>;
+#endif
     using apifunc = std::function<void(sess s, asionet::message<MsgTypes>&)>;
 
     client():

@@ -11,8 +11,13 @@
 struct server
 {
 
+#if 0 // no encryption synchronous read
+    using sess = std::shared_ptr<asionet::session<MsgTypes, false>>;
+    using interface = asionet::server_interface<MsgTypes, false, false>;
+#else // encryption + async read 
     using sess = std::shared_ptr<asionet::session<MsgTypes>>;
     using interface = asionet::server_interface<MsgTypes>;
+#endif
     using apifunc = std::function<void(sess s, asionet::message<MsgTypes>&)>;
 
     server(uint16_t port):
