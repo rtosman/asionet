@@ -71,7 +71,8 @@ private:
         { MsgTypes::Ping, [this](sess s, asionet::message<MsgTypes>& m) 
                                 {
                                         // for ping, just send back the message as-is for
-                                        // minimal latency
+                                        // minimal latency, the ping is only a header 
+                                        // so encryption will not be applied
                                         auto& reply = m_replies.create_inplace(m);
                                         auto& replies = m_replies;
                                         s->write(reply, 

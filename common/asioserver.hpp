@@ -6,8 +6,6 @@
 #include "asiosession.hpp"
 #include <list>
 #include <functional>
-#include <botan/rng.h>
-#include <botan/auto_rng.h>
 
 // to debug define ASIO_ENABLE_HANDLER_TRACKING when building
 namespace asionet
@@ -18,7 +16,6 @@ namespace asionet
         using new_connection_notification_cb = std::function<bool(std::shared_ptr<session<T>>)>;
         using msg_ready_notification_cb = std::function<void()>;
         using disconnect_notification_cb = std::function<void(std::shared_ptr<session<T>>)>;
-        using decrypt_type = std::unique_ptr<Botan::Cipher_Mode>;
 
         template <typename F1, 
                   typename F2, 
@@ -35,12 +32,8 @@ namespace asionet
                                 m_msg_ready_cb(msg_ready_cb),
                                 m_disconnect_cb(disconnect_cb),
                                 m_socket(m_context),
-                                m_acceptor(m_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), m_port)),
-                                m_dec(Botan::Cipher_Mode::create("AES-128/CBC/PKCS7", Botan::DECRYPTION))                                
+                                m_acceptor(m_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), m_port))
         {
-            if constexpr (Encrypt == true)
-                m_dec->set_key(key);
-
             // prime the pump
             prime();
         }
@@ -91,12 +84,6 @@ namespace asionet
         asio::ip::tcp::socket                                    m_socket;
         std::list<std::shared_ptr<session<T, Encrypt>>>          m_sessions;
         asio::ip::tcp::acceptor                                  m_acceptor;
-        decrypt_type                                             m_dec;
-
-        uint32_t crypto_align(uint32_t size)
-        {
-            return size + (16 - (size % 16));
-        }
 
         void remove_session(std::shared_ptr<session<T>> s)
         {
@@ -112,7 +99,7 @@ namespace asionet
             auto& owned_msg = m_msgs.create_inplace(std::move(t));
 
             if constexpr (Encrypt == true)
-                owned_msg.m_msg.body().resize(crypto_align(owned_msg.m_msg.m_header.m_size));
+                owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
             else
                 owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
 
@@ -137,7 +124,7 @@ namespace asionet
             auto& owned_msg = m_msgs.create_inplace(std::move(t));
 
             if constexpr (Encrypt == true)
-                owned_msg.m_msg.body().resize(crypto_align(owned_msg.m_msg.m_header.m_size));
+                owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
             else
                 owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
 
@@ -167,10 +154,7 @@ namespace asionet
             {
                 if constexpr (Encrypt == true)
                 {
-                    Botan::secure_vector<uint8_t> iv(&owned_msg->m_msg.m_header.m_iv[0], 
-                                                     &owned_msg->m_msg.m_header.m_iv[16]);
-                    m_dec->start(iv);
-                    m_dec->finish(owned_msg->m_msg.body());
+                    owned_msg->m_remote->decrypt(owned_msg);
                 }
 
                 m_msg_ready_cb();
