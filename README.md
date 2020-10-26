@@ -1,5 +1,8 @@
 # asionet
 
+Sample client server built around a small framework called asionet that is a thin layer
+over asio specializing it for tcp.
+
 Build notes:
 
 Prequiresites are:
