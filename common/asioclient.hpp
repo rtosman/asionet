@@ -131,7 +131,10 @@ namespace asionet
                                  );
             if constexpr (Encrypt == true)
             {
-                owned_msg.m_remote->decrypt(owned_msg);
+                if (owned_msg.m_remote)
+                {
+                    owned_msg.m_remote->decrypt(owned_msg);
+                }
             }
 
             m_msg_ready_cb();
@@ -171,7 +174,10 @@ namespace asionet
             {
                 if constexpr (Encrypt == true)
                 {
-                    owned_msg->m_remote->decrypt(owned_msg);
+                    if (owned_msg->m_remote)
+                    {
+                        owned_msg->m_remote->decrypt(owned_msg);
+                    }
                 }
 
                 m_msg_ready_cb();

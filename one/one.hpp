@@ -9,6 +9,7 @@ enum class MsgTypes: uint32_t
     Ping,
     FireBullet,
     MovePlayer,
+    CaptureTheFlag,
     NumEnumElements
 };
 

@@ -104,13 +104,341 @@ struct client
                     );
     }
 
+    void capture_flag(uint8_t a,
+                      uint8_t b,
+                      uint8_t c,
+                      uint8_t d,
+                      uint8_t e,
+                      uint8_t f,
+                      uint8_t g
+                     )
+    {
+        auto& msg = m_outgoing.create_empty_inplace();
+
+        msg.m_header.m_id = MsgTypes::CaptureTheFlag;
+        msg << a << b << c << d << e << f << g << m_cdf;
+
+        m_intf->send(msg, [this, &msg]() 
+                        {
+                remove_sent(msg);
+                        }
+                    );
+
+    }
+
+    static uint8_t str_to_bin(const char* s)
+    {
+        uint8_t val = 0;
+        for (auto i = 0; i < 8; i++)
+        {
+            val <<= 1;
+
+            if (s[i] == '1')
+            {
+                val |= 1;
+            }
+        }
+
+        return val;
+    }
+
+    static uint8_t ascii_one()
+    {
+        std::string ival("xxzzyyyz");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += 0x31;
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+
+    static uint8_t ascii_capital_a()
+    {
+        std::string ival("xzyyyyyz");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    static uint8_t ascii_capital_b()
+    {
+        std::string ival("xzyyyyzx");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    static uint8_t ascii_capital_c()
+    {
+        std::string ival("xzyyyyzz");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    static uint8_t ascii_capital_d()
+    {
+        std::string ival("xzyyyzxx");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    static uint8_t ascii_capital_e()
+    {
+        std::string ival("xzyyyzxz");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    static uint8_t ascii_capital_f()
+    {
+        std::string ival("xzyyyzzx");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    static uint8_t ascii_capital_g()
+    {
+        std::string ival("xzyyyzzz");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    static uint8_t ascii_capital_k()
+    {
+        std::string ival("xzyyzxzz");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'x')
+            {
+                oval += '0';
+            }
+            else if (v == 'y')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    static uint32_t get_3()
+    {
+        std::string ival("KGGLdKzz");
+        std::string oval;
+
+        for (auto v : ival)
+        {
+            if (v == 0) break;
+            if (v == 'h')
+            {
+                oval += '0';
+            }
+            else if (v == ascii_capital_g())
+            {
+                oval += '0';
+            }
+            else if (v == 'L')
+            {
+                oval += '0';
+            }
+            else if (v == ascii_capital_k())
+            {
+                oval += '0';
+            }
+            else if (v == 'd')
+            {
+                oval += '0';
+            }
+            else
+            {
+                oval += ascii_one();
+            }
+        }
+
+        return str_to_bin(oval.c_str());
+    }
+
+    // static predamage
+    void get_ctf_sequence()
+    {
+        // repair ascii_capital_* here
+        uint8_t a,b,c,d,e,f,g;
+
+        std::cout << ascii_capital_a() << ":\n";
+        std::cin >> a;
+        std::cout << ascii_capital_b() << ":\n";
+        std::cin >> b;
+        std::cout << ascii_capital_c() << ":\n";
+        std::cin >> c;
+        std::cout << ascii_capital_d() << ":\n";
+        std::cin >> d;
+        std::cout << ascii_capital_e() << ":\n";
+        std::cin >> e;
+        std::cout << ascii_capital_f() << ":\n";
+        std::cin >> f;
+        std::cout << ascii_capital_g() << ":\n";
+        std::cin >> g;
+        
+        // redamage ascii_capital_* here and repair
+        // capture flag here
+        capture_flag(a, b, c, d, e, f, g);
+        // redamage capture_flag here
+    }
+
     bool run()
     {
         const int Ping = 0;
         const int Fire = 1;
         const int Move = 2;
         const int Quit = 3;
-
+        const int Capture = 4;
 
         if (GetForegroundWindow() == GetConsoleWindow())
         {
@@ -118,6 +446,7 @@ struct client
             m_key[Fire] = GetAsyncKeyState('F') & 0x8000;
             m_key[Move] = GetAsyncKeyState('M') & 0x8000;
             m_key[Quit] = GetAsyncKeyState('Q') & 0x8000;
+            m_key[Capture] = GetAsyncKeyState(ascii_capital_k()) & 0x8000;
         }
 
         if ((m_key[Quit] && !m_old_key[Quit]))
@@ -157,11 +486,35 @@ struct client
             }
             if (m_key[Fire] && !m_old_key[Fire])
             {
-                fire_bullet(2.0f, 5.0f);
+                std::string x,y;
+
+                std::cout << "Enter X:\n";
+                std::cin >> x;
+                std::cout << "Enter Y:\n";
+                std::cin >> y;
+
+                fire_bullet(std::stof(x), std::stof(y));
             }
             if (m_key[Move] && !m_old_key[Move])
             {
-                move_player(12.0f, 52.0f);
+                std::string x,y;
+
+                std::cout << "Enter X:\n";
+                std::cin >> x;
+                std::cout << "Enter Y:\n";
+                std::cin >> y;
+                
+                move_player(std::stod(x), std::stod(y));
+            }            
+            if (m_key[Capture] && !m_old_key[Capture])
+            {
+                if(m_ctf_readiness == get_3())
+                {
+                    // put label here to invoke repair of get_ctf_sequence
+                    get_ctf_sequence();
+                    // put label here to invoke redamage of get_ctf_sequence
+                }
+                --m_ctf_readiness;
             }
             break;
         }
@@ -183,11 +536,13 @@ private:
     std::vector<uint32_t>                           m_ping_times;
     bool                                            m_flood_ping{ false };
     bool                                            m_ping_in_transit{ false };
-    std::array<bool,4>                              m_key{false, false, false, false};
-    std::array<bool, 4>                             m_old_key{false, false, false, false};
+    std::array<bool, 5>                             m_key{false, false, false, false, false};
+    std::array<bool, 5>                             m_old_key{false, false, false, false, false};
     bool                                            m_run{ true };
     asionet::protqueue<asionet::message<MsgTypes>>  m_outgoing;
     std::mutex                                      m_state_lock;
+    int                                             m_ctf_readiness{0};
+    uint8_t                                         m_cdf{0};
 
     std::map<MsgTypes, apifunc> m_apis = {
     { MsgTypes::Invalid, [](sess s, asionet::message<MsgTypes>& m)
@@ -219,17 +574,30 @@ private:
                                 m_ping_in_transit = false;
                             }
     },
-    { MsgTypes::FireBullet, [](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::FireBullet, [this](sess s, asionet::message<MsgTypes>& m)
                             {
+                                --m_ctf_readiness;
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
                             }
     },
-    { MsgTypes::MovePlayer, [](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::MovePlayer, [this](sess s, asionet::message<MsgTypes>& m)
+                            {
+                                ++m_ctf_readiness;
+                                std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
+                            }
+    },
+    { MsgTypes::CaptureTheFlag, [](sess s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
                             }
     }
     };
+
+    const char* decrypt_flag(const char* encrypted_content)
+    {
+        // this is where transformit needs to go to decrypt the flag
+        return encrypted_content;
+    }
 
     void remove_sent(asionet::message<MsgTypes>& msg)
     {
