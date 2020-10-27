@@ -11,9 +11,9 @@
 struct server
 {
 
-#if 0 // no encryption synchronous read
+#if 0 // no encryption asynchronous read
     using sess = std::shared_ptr<asionet::session<MsgTypes, false>>;
-    using interface = asionet::server_interface<MsgTypes, false, false>;
+    using interface = asionet::server_interface<MsgTypes, false, true>;
 #else // encryption + async read 
     using sess = std::shared_ptr<asionet::session<MsgTypes>>;
     using interface = asionet::server_interface<MsgTypes>;
