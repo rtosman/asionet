@@ -8,16 +8,23 @@
 #include <map>
 #include "one.hpp"
 
+using namespace std::chrono_literals;
+
 struct client
 {
 #if 0 // no encryption synchronous read
-    using sess = asionet::client_interface<MsgTypes, false, false>::sess;
-    using interface = asionet::client_interface<MsgTypes, false>;
+    using sess = asionet::client_interface<MsgTypes, false>::sess;
+    using interface = asionet::client_interface<MsgTypes, false, true>;
 #else // encryption + async read 
     using sess = asionet::client_interface<MsgTypes>::sess;
     using interface = asionet::client_interface<MsgTypes>;
 #endif
     using apifunc = std::function<void(sess s, asionet::message<MsgTypes>&)>;
+
+    const int Ping = 0;
+    const int Fire = 1;
+    const int Move = 2;
+    const int Quit = 3;
 
     client():
         m_intf(std::make_unique<interface>(m_context,
@@ -62,7 +69,7 @@ struct client
     {
         std::scoped_lock lock(m_state_lock);
 
-        if (m_ping_in_transit)
+        if (m_msg_in_flight[Ping])
         {
             return;
         }
@@ -76,11 +83,18 @@ struct client
                 remove_sent(msg);
             });
 
-        m_ping_in_transit = true;
+        m_msg_in_flight[Ping] = true;
     }
 
     void fire_bullet(float x, float y)
     {
+        std::scoped_lock lock(m_state_lock);
+
+        if (m_msg_in_flight[Fire])
+        {
+            return;
+        }
+
         auto& msg = m_outgoing.create_empty_inplace();
 
         msg.m_header.m_id = MsgTypes::FireBullet;
@@ -89,10 +103,19 @@ struct client
             {
                 remove_sent(msg);
             });
+
+        m_msg_in_flight[Fire] = true;
     }
 
     void move_player(double x, double y)
     {
+        std::scoped_lock lock(m_state_lock);
+
+        if (m_msg_in_flight[Move])
+        {
+            return;
+        }
+
         auto& msg = m_outgoing.create_empty_inplace();
 
         msg.m_header.m_id = MsgTypes::MovePlayer;
@@ -102,16 +125,11 @@ struct client
                 remove_sent(msg);
                         }
                     );
+        m_msg_in_flight[Move] = true;
     }
 
     bool run()
     {
-        const int Ping = 0;
-        const int Fire = 1;
-        const int Move = 2;
-        const int Quit = 3;
-
-
         if (GetForegroundWindow() == GetConsoleWindow())
         {
             m_key[Ping] = GetAsyncKeyState('P') & 0x8000;
@@ -155,14 +173,56 @@ struct client
                     std::cout << "Flood ping [OFF]\n";
                 }
             }
+
+            std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+            auto deltams = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(now - m_last_transition));
+
             if (m_key[Fire] && !m_old_key[Fire])
+            {
+                m_auto_repeat[Fire] = false;
+                m_last_transition = std::chrono::system_clock::now();
+                fire_bullet(2.0f, 5.0f);
+            }
+            else if(!m_auto_repeat[Fire] && 
+                    (m_key[Fire] && m_old_key[Fire]) && 
+                    (deltams > 500ms))
+            {
+                m_auto_repeat[Fire] = true;
+            }
+            else if(m_auto_repeat[Fire] && !m_key[Fire] && !m_old_key[Fire])
+            {
+                m_last_transition = std::chrono::system_clock::now();                
+                m_auto_repeat[Fire] = false;
+                m_msg_in_flight[Fire] = false;
+            }
+            else if(m_key[Fire] && m_auto_repeat[Fire])
             {
                 fire_bullet(2.0f, 5.0f);
             }
+                    
             if (m_key[Move] && !m_old_key[Move])
+            {
+                m_auto_repeat[Move] = false;
+                m_last_transition = std::chrono::system_clock::now();
+                move_player(12.0f, 52.0f);
+            }
+            else if(!m_auto_repeat[Move] && 
+                    (m_key[Move] && m_old_key[Move]) && 
+                    (deltams > 500ms))
+            {
+                m_auto_repeat[Move] = true;
+            }
+            else if(m_auto_repeat[Move] && !m_key[Move] && !m_old_key[Move])
+            {
+                m_last_transition = std::chrono::system_clock::now();                
+                m_auto_repeat[Move] = false;
+                m_msg_in_flight[Move] = false;
+            }
+            else if(m_key[Move] && m_auto_repeat[Move])
             {
                 move_player(12.0f, 52.0f);
             }
+
             break;
         }
 
@@ -182,12 +242,14 @@ private:
     }                                               m_state{ ConnectionRequested };
     std::vector<uint32_t>                           m_ping_times;
     bool                                            m_flood_ping{ false };
-    bool                                            m_ping_in_transit{ false };
+    bool                                            m_msg_in_flight[3]{ false,false,false };
     std::array<bool,4>                              m_key{false, false, false, false};
     std::array<bool, 4>                             m_old_key{false, false, false, false};
     bool                                            m_run{ true };
     asionet::protqueue<asionet::message<MsgTypes>>  m_outgoing;
     std::mutex                                      m_state_lock;
+    std::chrono::system_clock::time_point           m_last_transition;
+    bool                                            m_auto_repeat[3]{false,false,false};
 
     std::map<MsgTypes, apifunc> m_apis = {
     { MsgTypes::Invalid, [](sess s, asionet::message<MsgTypes>& m)
@@ -216,17 +278,19 @@ private:
                                               << "us (calculated over " << m_ping_times.size() << " samples)\n";
                                     m_ping_times.clear();
                                 }
-                                m_ping_in_transit = false;
+                                m_msg_in_flight[Ping] = false;
                             }
     },
-    { MsgTypes::FireBullet, [](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::FireBullet, [this](sess s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
+                                m_msg_in_flight[Fire] = false;
                             }
     },
-    { MsgTypes::MovePlayer, [](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::MovePlayer, [this](sess s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
+                                m_msg_in_flight[Move] = false;
                             }
     }
     };
