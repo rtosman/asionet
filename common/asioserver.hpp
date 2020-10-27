@@ -96,7 +96,7 @@ namespace asionet
         void read_body_sync(std::shared_ptr<session<T, Encrypt>> s)
         {
             owned_message<T, Encrypt> t(s->get_hdr(), s);
-            auto& owned_msg = m_msgs.create_inplace(std::move(t));
+            auto& owned_msg = m_msgs.create_inplace(t);
 
             if constexpr (Encrypt == true)
                 owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
@@ -109,16 +109,17 @@ namespace asionet
                                  );
             if constexpr (Encrypt == true)
             {
-                owned_msg.m_remote->decrypt(owned_msg);
+                owned_msg.m_remote->decrypt(owned_msg.m_msg);
             }
 
             m_msg_ready_cb();
+            s->start();
         }
 
         void read_body_async(std::shared_ptr<session<T, Encrypt>> s)
         {
             owned_message<T, Encrypt> t(s->get_hdr(), s);
-            auto& owned_msg = m_msgs.create_inplace(std::move(t));
+            auto& owned_msg = m_msgs.create_inplace(t);
 
             if constexpr (Encrypt == true)
                 owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
@@ -140,10 +141,11 @@ namespace asionet
             else
             {
                 m_msg_ready_cb();
+                s->start();
             }
         }
 
-        void handle_read(owned_message<T>* owned_msg,
+        void handle_read(owned_message<T, Encrypt>* owned_msg,
                          const asio::error_code& ec,
                          size_t bytes_transferred)
         {
@@ -151,10 +153,12 @@ namespace asionet
             {
                 if constexpr (Encrypt == true)
                 {
-                    owned_msg->m_remote->decrypt(owned_msg);
+                    owned_msg->m_remote->decrypt(owned_msg->m_msg);
                 }
 
+                std::shared_ptr<session<T, Encrypt>> s=owned_msg->m_remote;
                 m_msg_ready_cb();
+                s->start(); // we've handled the message, start again
             }
             else
             {

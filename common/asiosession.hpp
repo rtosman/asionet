@@ -124,14 +124,13 @@ namespace asionet
             );
         }
 
-        void decrypt(owned_message<T>* owned_msg)
+        void decrypt(message<T>& msg)
         {
-            Botan::secure_vector<uint8_t> iv(&owned_msg->m_msg.m_header.m_iv[0],
-                                             &owned_msg->m_msg.m_header.m_iv[16]);
+            Botan::secure_vector<uint8_t> iv(&msg.m_header.m_iv[0],
+                                             &msg.m_header.m_iv[16]);
             m_dec->start(iv);
-            m_dec->finish(owned_msg->m_msg.body());
+            m_dec->finish(msg.body());
         }
-
 
         private:
         void handle_read_complete(const asio::error_code& ec,
@@ -140,7 +139,6 @@ namespace asionet
             if (!ec)
             {
                 m_mcb(enable_shared::shared_from_this());
-                start(); // we've handled the message, start again
             }
             else
             {

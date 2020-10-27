@@ -135,6 +135,7 @@ namespace asionet
             }
 
             m_msg_ready_cb();
+            s->start();
         }
 
         void read_body_async(std::shared_ptr<session<T, Encrypt>> s)
@@ -160,6 +161,7 @@ namespace asionet
             else
             {
                 m_msg_ready_cb();
+                s->start();
             }
         }
 
@@ -171,10 +173,11 @@ namespace asionet
             {
                 if constexpr (Encrypt == true)
                 {
-                    owned_msg->m_remote->decrypt(owned_msg);
+                    owned_msg->m_remote->decrypt(owned_msg->m_msg);
                 }
-
+                std::shared_ptr<session<T, Encrypt>> s=owned_msg->m_remote;
                 m_msg_ready_cb();
+                s->start();
             }
             else
             {
