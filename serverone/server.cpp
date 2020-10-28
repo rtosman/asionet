@@ -30,7 +30,7 @@ struct server
                                 [this]() 
                                 {
                                     auto m = m_intf->incoming().pop_front();
-                                    m_apis[clamp_msg_types(m.m_msg.api())](m.m_remote, m.m_msg);
+                                    m_apis[clamp_msg_types(m->m_msg.api())](m->m_remote, m->m_msg);
                                 },
                                 [](sess s)
                                 {
@@ -64,8 +64,8 @@ private:
                                     std::cerr << "Client is connected\n";
                                     auto& reply = m_replies.create_inplace(m);
                                     auto& replies = m_replies;
-                                    reply.blank(); // Connected reply has no data
-                                    s->write(reply, 
+                                    reply->blank(); // Connected reply has no data
+                                    s->write(*reply, 
                                             [&replies, &reply](sess s) -> void 
                                             {
                                                 replies.slow_erase(reply);
@@ -79,8 +79,10 @@ private:
                                         // minimal latency, the ping is only a header 
                                         // so encryption will not be applied
                                         auto& reply = m_replies.create_inplace(m);
+                                        // reply->m_header = m.m_header;
+                                        // reply->m_body = m.m_body;
                                         auto& replies = m_replies;
-                                        s->write(reply, 
+                                        s->write(*reply, 
                                                  [&replies, &reply](sess s) -> void 
                                                  {
                                                     replies.slow_erase(reply);
@@ -98,10 +100,10 @@ private:
                                             << ") from: " << s->socket().remote_endpoint() << "\n";
 
                                         auto& reply = m_replies.create_empty_inplace();
-                                        reply.m_header.m_id = m.m_header.m_id;
-                                        reply << "Fired OK!";
+                                        reply->m_header.m_id = m.m_header.m_id;
+                                        *reply << "Fired OK!";
                                         auto& replies = m_replies;
-                                        s->write(reply, 
+                                        s->write(*reply, 
                                                  [&replies, &reply](sess s) -> void 
                                                  {
                                                     std::cout << "FireBullet reply sent\n";
@@ -120,10 +122,10 @@ private:
                                             << ") from: " << s->socket().remote_endpoint() << "\n";
 
                                         auto& reply = m_replies.create_empty_inplace();
-                                        reply.m_header.m_id = m.m_header.m_id;
-                                        reply << "Moved Player OK!";
+                                        reply->m_header.m_id = m.m_header.m_id;
+                                        *reply << "Moved Player OK!";
                                         auto& replies = m_replies;
-                                        s->write(reply, 
+                                        s->write(*reply, 
                                                  [&replies, &reply](sess s) -> void {
                                                     std::cout << "MovePlayer reply sent\n";
                                                     replies.slow_erase(reply);

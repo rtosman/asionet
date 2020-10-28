@@ -9,7 +9,9 @@
 
 namespace asionet 
 {
-    template <uint8_t BlockSize = 16>
+    const int AESBlockSize = 16;
+
+    template <uint8_t BlockSize = AESBlockSize>
     uint32_t crypto_align(uint32_t size)
     {
         return size + (BlockSize - (size % BlockSize));

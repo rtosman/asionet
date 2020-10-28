@@ -6,6 +6,7 @@
 #include "asiomsg.hpp"
 #include "asiosession.hpp"
 #include "one.hpp"
+#include <cassert>
 
 namespace asionet 
 {
@@ -143,16 +144,16 @@ namespace asionet
             owned_message<T, Encrypt> t(s->get_hdr(), s);
             auto& owned_msg=m_msgs.create_inplace(std::move(t));
             if constexpr (Encrypt == true)
-                owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
+                owned_msg->m_msg.body().resize(asionet::crypto_align(owned_msg->m_msg.m_header.m_size));
             else
-                owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
+                owned_msg->m_msg.body().resize(owned_msg->m_msg.m_header.m_size);
             
             if (s->get_hdr().m_size) {
-                s->socket().async_read_some(asio::buffer(owned_msg.m_msg.body().data(),
-                                                         owned_msg.m_msg.body().size()),
+                s->socket().async_read_some(asio::buffer(owned_msg->m_msg.body().data(),
+                                                         owned_msg->m_msg.body().size()),
                     std::bind(&client_interface::handle_read,
                         this,
-                        &owned_msg,
+                        owned_msg,
                         std::placeholders::_1,
                         std::placeholders::_2
                     )
@@ -165,7 +166,7 @@ namespace asionet
             }
         }
 
-        void handle_read(owned_message<T, Encrypt>* owned_msg,
+        void handle_read(std::shared_ptr<owned_message<T, Encrypt>> owned_msg,
                          const asio::error_code& ec,
                          size_t bytes_transferred)
         {
@@ -173,11 +174,13 @@ namespace asionet
             {
                 if constexpr (Encrypt == true)
                 {
+                    assert(owned_msg->get());
+                    assert(bytes_transferred >= AESBlockSize);
                     owned_msg->m_remote->decrypt(owned_msg->m_msg);
                 }
-                std::shared_ptr<session<T, Encrypt>> s=owned_msg->m_remote;
+
                 m_msg_ready_cb();
-                s->start();
+                owned_msg->m_remote->start();
             }
             else
             {

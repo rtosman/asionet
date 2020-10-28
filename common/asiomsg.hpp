@@ -32,7 +32,35 @@ namespace asionet
             }
         }
 
-       BodyType& body()
+        message(const message<T>& other)
+        {
+            if(this == &other) return;
+
+            this->m_body = other.m_body;
+            this->m_header = other.m_header;
+        }
+
+        message(message<T>&& other)
+        {
+            if(this == &other) return;
+
+            this->m_body = other.m_body;
+            this->m_header = other.m_header;
+
+            other.blank();
+        }
+
+        message<T>& operator=(const message<T>& other)
+        {
+            if(this == &other) return *this;
+
+            this->m_body = other.m_body;
+            this->m_header = other.m_header;
+
+            return *this;
+        }
+
+        BodyType& body()
         {
             return m_body;
         }
@@ -109,6 +137,32 @@ namespace asionet
 
         }
 
+        owned_message(const owned_message<T, Encrypt>& other)
+        {
+            if(this == &other) return;
+
+            this->m_remote = other.m_remote;
+            this->m_msg = other.m_msg;
+        }
+
+        owned_message(owned_message<T, Encrypt>&& other)
+        {
+            if(this == &other) return;
+
+            this->m_remote = other.m_remote;
+            this->m_msg = other.m_msg;
+
+            other.m_remote = nullptr;
+            other.m_msg.blank();
+        }
+
+        owned_message<T, Encrypt>& operator=(const owned_message<T, Encrypt>& other)
+        {
+            if(this == &other) return *this;
+
+            this->m_remote = other.m_remote;
+            this->m_msg = other.m_msg;
+        }
 //        friend std::ostream& operator<<(std::ostream& os, const owned_message<T>& msg)
 //        {
 //            os << msg.msg;

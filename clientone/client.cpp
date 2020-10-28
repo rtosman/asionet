@@ -31,7 +31,7 @@ struct client
                                             [this]()
                                             {
                                                 auto m = m_intf->incoming().pop_front();
-                                                m_apis[clamp_msg_types(m.m_msg.api())](m.m_remote, m.m_msg);
+                                                m_apis[clamp_msg_types(m->m_msg.api())](m->m_remote, m->m_msg);
                                             },
                                             [](sess s)
                                             {
@@ -58,10 +58,13 @@ struct client
     {
         auto& msg = m_outgoing.create_empty_inplace();
 
-        msg.m_header.m_id = MsgTypes::Connected;
-        m_intf->send(msg, [this, &msg]()
+        msg->m_header.m_id = MsgTypes::Connected;
+
+        auto& replies = m_outgoing;
+
+        m_intf->send(*msg, [&replies, &msg]()
             {
-                remove_sent(msg);
+                replies.slow_erase(msg);
             });
     }
 
@@ -76,11 +79,13 @@ struct client
 
         auto& msg = m_outgoing.create_empty_inplace();
 
-        msg.m_header.m_id = MsgTypes::Ping;
-        msg << t;
-        m_intf->send(msg, [this, &msg]()
+        msg->m_header.m_id = MsgTypes::Ping;
+        *msg << t;
+
+        auto& replies = m_outgoing;
+        m_intf->send(*msg, [&replies, &msg]()
             {
-                remove_sent(msg);
+                replies.slow_erase(msg);
             });
 
         m_msg_in_flight[Ping] = true;
@@ -97,11 +102,13 @@ struct client
 
         auto& msg = m_outgoing.create_empty_inplace();
 
-        msg.m_header.m_id = MsgTypes::FireBullet;
-        msg << x << y;
-        m_intf->send(msg, [this, &msg]()
+        msg->m_header.m_id = MsgTypes::FireBullet;
+        *msg << x << y;
+
+        auto& replies = m_outgoing;
+        m_intf->send(*msg, [&replies, &msg]()
             {
-                remove_sent(msg);
+                replies.slow_erase(msg);
             });
 
         m_msg_in_flight[Fire] = true;
@@ -118,13 +125,17 @@ struct client
 
         auto& msg = m_outgoing.create_empty_inplace();
 
-        msg.m_header.m_id = MsgTypes::MovePlayer;
-        msg << x << y;
-        m_intf->send(msg, [this, &msg]() 
+        msg->m_header.m_id = MsgTypes::MovePlayer;
+        *msg << x << y;
+
+        auto& replies = m_outgoing;
+
+        m_intf->send(*msg, [&replies, &msg]()
                         {
-                remove_sent(msg);
+                            replies.slow_erase(msg);
                         }
                     );
+
         m_msg_in_flight[Move] = true;
     }
 
@@ -295,13 +306,6 @@ private:
     }
     };
 
-    void remove_sent(asionet::message<MsgTypes>& msg)
-    {
-        for (auto i = m_outgoing.begin(); i != m_outgoing.end(); )
-        {
-            (&(*i) == &msg) ? i = m_outgoing.erase(i) : ++i;
-        }
-    }
  };
 
 int main(int argc, char** argv)
