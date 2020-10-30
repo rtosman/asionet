@@ -12,14 +12,15 @@ using namespace std::chrono_literals;
 
 struct client
 {
-#if 0 // no encryption synchronous read
-    using sess = asionet::client_interface<MsgTypes, false>::sess;
-    using interface = asionet::client_interface<MsgTypes, false, true>;
+#if 1 // no encryption asynchronous read
+    using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
+    using interface_type = asionet::client_interface<MsgTypes, false, true>;
 #else // encryption + async read 
-    using sess = asionet::client_interface<MsgTypes>::sess;
-    using interface = asionet::client_interface<MsgTypes>;
+    using sess = std::shared_ptr<asionet::session<MsgTypes>>;
+    using interface = asionet::server_interface<MsgTypes>;
 #endif
-    using apifunc = std::function<void(sess s, asionet::message<MsgTypes>&)>;
+    using apifunc_type = std::function<void(sess_type s, asionet::message<MsgTypes>&)>;
+    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes,false>>;
 
     const int Ping = 0;
     const int Fire = 1;
@@ -27,13 +28,14 @@ struct client
     const int Quit = 3;
 
     client():
-        m_intf(std::make_unique<interface>(m_context,
-                                            [this]()
+        m_intf(std::make_unique<interface_type>(m_context,
+                                            [this](queue_type& queue)
                                             {
-                                                auto m = m_intf->incoming().pop_front();
-                                                m_apis[clamp_msg_types(m->m_msg.api())](m->m_remote, m->m_msg);
+                                                auto& m = queue.front();
+                                                m_apis[clamp_msg_types(m.m_msg.api())](m.m_remote, m.m_msg);
+                                                queue.pop_front();
                                             },
-                                            [](sess s)
+                                            [](sess_type s)
                                             {
                                                 std::cout << "Connection dropped\n";
                                             }
@@ -58,11 +60,11 @@ struct client
     {
         auto& msg = m_outgoing.create_empty_inplace();
 
-        msg->m_header.m_id = MsgTypes::Connected;
+        msg.m_header.m_id = MsgTypes::Connected;
 
         auto& replies = m_outgoing;
 
-        m_intf->send(*msg, [&replies, &msg]()
+        m_intf->send(msg, [&replies, &msg]()
             {
                 replies.slow_erase(msg);
             });
@@ -79,11 +81,11 @@ struct client
 
         auto& msg = m_outgoing.create_empty_inplace();
 
-        msg->m_header.m_id = MsgTypes::Ping;
-        *msg << t;
+        msg.m_header.m_id = MsgTypes::Ping;
+        msg << t;
 
         auto& replies = m_outgoing;
-        m_intf->send(*msg, [&replies, &msg]()
+        m_intf->send(msg, [&replies, &msg]()
             {
                 replies.slow_erase(msg);
             });
@@ -102,11 +104,11 @@ struct client
 
         auto& msg = m_outgoing.create_empty_inplace();
 
-        msg->m_header.m_id = MsgTypes::FireBullet;
-        *msg << x << y;
+        msg.m_header.m_id = MsgTypes::FireBullet;
+        msg << x << y;
 
         auto& replies = m_outgoing;
-        m_intf->send(*msg, [&replies, &msg]()
+        m_intf->send(msg, [&replies, &msg]()
             {
                 replies.slow_erase(msg);
             });
@@ -125,12 +127,12 @@ struct client
 
         auto& msg = m_outgoing.create_empty_inplace();
 
-        msg->m_header.m_id = MsgTypes::MovePlayer;
-        *msg << x << y;
+        msg.m_header.m_id = MsgTypes::MovePlayer;
+        msg << x << y;
 
         auto& replies = m_outgoing;
 
-        m_intf->send(*msg, [&replies, &msg]()
+        m_intf->send(msg, [&replies, &msg]()
                         {
                             replies.slow_erase(msg);
                         }
@@ -244,7 +246,7 @@ struct client
 
 private:
     asio::io_context                    m_context;
-    std::unique_ptr<interface>          m_intf;
+    std::unique_ptr<interface_type>          m_intf;
     enum {
         ConnectionRequested,
         ConnectionMade,
@@ -262,19 +264,19 @@ private:
     std::chrono::system_clock::time_point           m_last_transition;
     bool                                            m_auto_repeat[3]{false,false,false};
 
-    std::map<MsgTypes, apifunc> m_apis = {
-    { MsgTypes::Invalid, [](sess s, asionet::message<MsgTypes>& m)
+    std::map<MsgTypes, apifunc_type> m_apis = {
+    { MsgTypes::Invalid, [](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cerr << "Invalid message received\n";
                             }
     },
-    { MsgTypes::Connected, [this](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::Connected, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "Connected \n";
                                 m_state = ConnectionComplete;
                             }
     },
-    { MsgTypes::Ping, [this](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::Ping, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
                                 std::chrono::system_clock::time_point t;
@@ -292,13 +294,13 @@ private:
                                 m_msg_in_flight[Ping] = false;
                             }
     },
-    { MsgTypes::FireBullet, [this](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::FireBullet, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
                                 m_msg_in_flight[Fire] = false;
                             }
     },
-    { MsgTypes::MovePlayer, [this](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::MovePlayer, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
                                 m_msg_in_flight[Move] = false;

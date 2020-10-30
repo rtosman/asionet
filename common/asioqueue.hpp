@@ -23,26 +23,26 @@ namespace asionet
             return m_queue.end();
         }
 
-        const std::shared_ptr<T> front()
+        T& front()
         {
             std::scoped_lock lock(m_queue_mutex);
             return m_queue.front();
         }
 
-        const std::shared_ptr<T> back()
+        T& back()
         {
             std::scoped_lock lock(m_queue_mutex);
             return m_queue.back();
         }
 
-        void push_back(std::shared_ptr<T> item)
+        void push_back(T& item)
         {
             std::scoped_lock lock(m_queue_mutex);
             m_queue.emplace_back(item);
 
         }
 
-        void push_front(std::shared_ptr<T> item)
+        void push_front(T& item)
         {
             std::scoped_lock lock(m_queue_mutex);
             m_queue.emplace_front(item);
@@ -66,20 +66,16 @@ namespace asionet
             m_queue.clear();
         }
 
-        [[nodiscard]] std::shared_ptr<T> pop_front()
+        void pop_front()
         {
             std::scoped_lock lock(m_queue_mutex);
-            auto t = m_queue.front();
             m_queue.pop_front();
-            return t;
         }
 
-        [[nodiscard]] std::shared_ptr<T> pop_back()
+        void pop_back()
         {
             std::scoped_lock lock(m_queue_mutex);
-            auto t = m_queue.back();
             m_queue.pop_back();
-            return t;
         }
 
         typename std::deque<T>::iterator erase(typename std::deque<T>::const_iterator i)
@@ -88,30 +84,31 @@ namespace asionet
             return m_queue.erase(i);
         }
 
-        void slow_erase(const std::shared_ptr<T>& item)
+        void slow_erase(const T& item)
         {
             std::scoped_lock lock(m_queue_mutex);
             for(auto i = m_queue.begin(); i != m_queue.end(); )
             {
-                ((*i) == item)? i = m_queue.erase(i):++i;
+                (&(*i) == &item)? i = m_queue.erase(i):++i;
             }
         }
 
-        [[nodiscard]] std::shared_ptr<T>& create_empty_inplace()
+        [[nodiscard]] T& create_empty_inplace()
         {
             std::scoped_lock lock(m_queue_mutex);
-            return m_queue.emplace_back(std::make_shared<T>());
+            return m_queue.emplace_back();
         }
 
-        [[nodiscard]] std::shared_ptr<T>& create_inplace(const T& item)
+        template <typename ...Args>
+        [[nodiscard]] T& create_inplace(Args&& ...args)
         {
             std::scoped_lock lock(m_queue_mutex);
-            return m_queue.emplace_back(std::make_shared<T>(item));
+            return m_queue.emplace_back(std::forward<Args>(args)...);
         }
 
     protected:
             std::mutex                      m_queue_mutex;
-            std::deque<std::shared_ptr<T>>  m_queue;
+            std::deque<T>                   m_queue;
     };
 }
 #endif

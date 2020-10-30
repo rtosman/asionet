@@ -65,7 +65,7 @@ namespace asionet
             return m_body;
         }
 
-        [[nodiscard]] T& api()
+        [[nodiscard]] T api() const
         {
             return m_header.m_id;
         }
@@ -122,19 +122,19 @@ namespace asionet
     {
         std::shared_ptr<session<T, Encrypt>>        m_remote;
         message<T>                                  m_msg;
-
+        
         owned_message(message_header<T>& hdr, std::shared_ptr<session<T, Encrypt>> remote):
                             m_remote(remote),
                             m_msg(hdr)
         {
-
+//            std::cout << "owned_msg constructed with header\n";
         }
 
         owned_message(message<T>& msg, std::shared_ptr<session<T, Encrypt>> remote):
                             m_remote(remote),
                             m_msg(msg)
         {
-
+//            std::cout << "owned_msg constructed with msg\n";
         }
 
         owned_message(const owned_message<T, Encrypt>& other)
@@ -143,6 +143,7 @@ namespace asionet
 
             this->m_remote = other.m_remote;
             this->m_msg = other.m_msg;
+            std::cout << "owned_msg copy constructed\n";
         }
 
         owned_message(owned_message<T, Encrypt>&& other)
@@ -154,7 +155,14 @@ namespace asionet
 
             other.m_remote = nullptr;
             other.m_msg.blank();
+            std::cout << "owned_msg move constructed\n";
+
         }
+
+        // ~owned_message()
+        // {
+        //     std::cout << "owned message destroyed: " << this << "\n";
+        // }
 
         owned_message<T, Encrypt>& operator=(const owned_message<T, Encrypt>& other)
         {
