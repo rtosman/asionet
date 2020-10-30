@@ -23,13 +23,13 @@ namespace asionet
             return m_queue.end();
         }
 
-        T& front()
+        [[nodiscard]] T& front()
         {
             std::scoped_lock lock(m_queue_mutex);
             return m_queue.front();
         }
 
-        T& back()
+        [[nodiscard]] T& back()
         {
             std::scoped_lock lock(m_queue_mutex);
             return m_queue.back();
