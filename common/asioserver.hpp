@@ -15,7 +15,7 @@ namespace asionet
     struct server_interface
     {
         using new_connection_notification_cb = std::function<bool(std::shared_ptr<session<T, Encrypt>>)>;
-        using msg_ready_notification_cb = std::function<void(protqueue<owned_message<T,Encrypt>>&)>;
+        using msg_ready_notification_cb = std::function<void(protqueue<owned_message<T, Encrypt>>&)>;
         using disconnect_notification_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
 
         template <typename F1, 
