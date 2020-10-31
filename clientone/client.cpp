@@ -12,15 +12,17 @@ using namespace std::chrono_literals;
 
 struct client
 {
-#if 1 // no encryption asynchronous read
+#if 0 // no encryption asynchronous read
     using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
     using interface_type = asionet::client_interface<MsgTypes, false, true>;
+    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, false>>;
 #else // encryption + async read 
-    using sess = std::shared_ptr<asionet::session<MsgTypes>>;
-    using interface = asionet::server_interface<MsgTypes>;
+    using sess_type = std::shared_ptr<asionet::session<MsgTypes>>;
+    using interface_type = asionet::client_interface<MsgTypes>;
+    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, true>>;
 #endif
     using apifunc_type = std::function<void(sess_type s, asionet::message<MsgTypes>&)>;
-    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes,false>>;
+
 
     const int Ping = 0;
     const int Fire = 1;

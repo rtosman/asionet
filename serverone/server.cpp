@@ -10,15 +10,16 @@
 
 struct server
 {
-#if 1 // no encryption asynchronous read
+#if 0 // no encryption asynchronous read
     using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
     using interface_type = asionet::server_interface<MsgTypes, false, true>;
+    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, false>>;
 #else // encryption + async read 
-    using sess = std::shared_ptr<asionet::session<MsgTypes>>;
-    using interface = asionet::server_interface<MsgTypes>;
+    using sess_type = std::shared_ptr<asionet::session<MsgTypes>>;
+    using interface_type = asionet::server_interface<MsgTypes>;
+    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, true>>;
 #endif
     using apifunc_type = std::function<void(sess_type s, asionet::message<MsgTypes>&)>;
-    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes,false>>;
 
     server(uint16_t port):
         m_intf(std::make_unique<interface_type>(m_context, port, 
