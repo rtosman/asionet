@@ -200,7 +200,6 @@ namespace asionet
                 }
                 else
                 {
-                    std::cout << "handle_body() short len: " << len << "\n";
                     cb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this());
                 }
             }

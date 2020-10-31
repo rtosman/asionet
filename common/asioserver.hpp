@@ -191,7 +191,6 @@ namespace asionet
             else
             {
                 ++m_stats.count_.msgs_rx_bad_;
-                std::cout << "handle_read encountered a read error: " << ec << "\n";
                 disconnect(owned_msg->m_remote);
             }            
         }
