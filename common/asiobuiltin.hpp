@@ -1,6 +1,7 @@
 
 #ifndef _ASIOBUILTIN_HPP_INCLUDED
 #define _ASIOBUILTIN_HPP_INCLUDED
+#include <cstdint>
 
 namespace asionet {
 struct stats 
