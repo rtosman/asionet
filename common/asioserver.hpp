@@ -50,6 +50,7 @@ namespace asionet
             {
                 if (m_connect_cb(existing))
                 {
+                    peak_sessions();
                     existing->start();
                 }
                 else
@@ -62,12 +63,13 @@ namespace asionet
             }
             else
             {
-                m_sessions.remove_if([&existing](std::shared_ptr<session<T, Encrypt>>& elem) 
-                    {
-                        return elem.get() == existing.get();
-                    }
-                );
+                remove_session(existing);
             }
+        }
+
+        asionet::stats& statistics()
+        {
+            return m_stats;
         }
 
     private:
@@ -78,21 +80,43 @@ namespace asionet
         disconnect_notification_cb                                          m_disconnect_cb;
         std::map<session<T, Encrypt>*, protqueue<owned_message<T,Encrypt>>> m_msgs;
         asio::ip::tcp::socket                                               m_socket;
-        std::list<std::shared_ptr<session<T, Encrypt>>>                     m_sessions;
         asio::ip::tcp::acceptor                                             m_acceptor;
+        stats                                                               m_stats;
 
         void remove_session(std::shared_ptr<session<T, Encrypt>> s)
         {
-            for(auto i = m_sessions.begin(); i != m_sessions.end(); )
+            auto it = m_msgs.find(s.get());
+            m_msgs.erase(it);                
+        }
+
+        void peak_sessions()
+        {
+            if(m_msgs.size() > m_stats.peak_.sessions_)
             {
-                ((*i).get() == s.get())? i = m_sessions.erase(i):++i;
+                m_stats.peak_.sessions_ = m_msgs.size();
             }
         }
 
- 
+        void peak_messages()
+        {
+            uint64_t msgs{0};
+
+            for(auto const& [key, q]: m_msgs)
+            {
+                msgs += q.size();
+            }
+
+            if(msgs > m_stats.peak_.msgs_)
+            {
+                m_stats.peak_.msgs_ = msgs;
+            }
+        }
+
         void read_body_sync(std::shared_ptr<session<T, Encrypt>> s)
         {
             auto& owned_msg = m_msgs[s.get()].create_inplace(s->get_hdr(), s);
+            
+            peak_messages();
 
             if constexpr (Encrypt == true)
             {
@@ -127,8 +151,6 @@ namespace asionet
 
             if (s->get_hdr().m_size)
             {
-                // if(m_msgs.size() > 1)
-                //     std::cout << "enqueuing async read body\n";
                 s->socket().async_read_some(asio::buffer(owned_msg.m_msg.body().data(),
                                                          owned_msg.m_msg.body().size()),
                     std::bind(&server_interface::handle_read,
@@ -150,6 +172,9 @@ namespace asionet
                          const asio::error_code& ec,
                          size_t bytes_transferred)
         {
+            peak_messages();
+            ++m_stats.count_.msgs_rx_good_;
+
             if (!ec)
             {
                 if constexpr (Encrypt == true)
@@ -161,9 +186,11 @@ namespace asionet
                 std::shared_ptr<session<T, Encrypt>> s = owned_msg->m_remote;
                 m_msg_ready_cb(m_msgs[s.get()]);
                 s->start(); // we've handled the message, start again
+
             }
             else
             {
+                ++m_stats.count_.msgs_rx_bad_;
                 std::cout << "handle_read encountered a read error: " << ec << "\n";
                 disconnect(owned_msg->m_remote);
             }            
@@ -173,37 +200,35 @@ namespace asionet
         {
             m_disconnect_cb(s);
             remove_session(s);
-            // following line to be uncommented with c++20
-            // std::erase_if(m_sessions, [&s](std::shared_ptr<session<T, Encrypt>> e) { return e.get() == s.get(); });
         }
 
         void prime()
         {
+            std::shared_ptr<asionet::session<T, Encrypt>> s;
+
             if constexpr (Async == true)
-                m_sessions.push_back(std::make_shared<session<T, Encrypt>>(m_context,
+                s = std::make_shared<session<T, Encrypt>>(m_context,
                                      std::bind(&server_interface::read_body_async,
                                                this,
                                                std::placeholders::_1),
                                      std::bind(&server_interface::disconnect,
                                                this,
                                                std::placeholders::_1)
-                                                                 )
-                                     );
+                                                         );
             else
-                m_sessions.push_back(std::make_shared<session<T, Encrypt>>(m_context,
+                s = std::make_shared<session<T, Encrypt>>(m_context,
                                      std::bind(&server_interface::read_body_sync,
                                                this,
                                                std::placeholders::_1),
                                      std::bind(&server_interface::disconnect,
                                                this,
                                                std::placeholders::_1)
-                                                                 )
-                                    );
+                                                         );
 
-            m_acceptor.async_accept(m_sessions.back()->socket(),
+            m_acceptor.async_accept(s->socket(),
                 std::bind(&server_interface::handle_accept,
                     this,
-                    m_sessions.back(),
+                    s,
                     std::placeholders::_1
                 )
             );

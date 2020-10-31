@@ -25,7 +25,8 @@ struct client
     const int Ping = 0;
     const int Fire = 1;
     const int Move = 2;
-    const int Quit = 3;
+    const int Stat = 3;
+    const int Quit = 4;
 
     client():
         m_intf(std::make_unique<interface_type>(m_context,
@@ -141,6 +142,30 @@ struct client
         m_msg_in_flight[Move] = true;
     }
 
+    void get_statistics()
+    {
+        std::scoped_lock lock(m_state_lock);
+
+        if (m_msg_in_flight[Stat])
+        {
+            return;
+        }
+
+        auto& msg = m_outgoing.create_empty_inplace();
+
+        msg.m_header.m_id = MsgTypes::Statistics;
+
+        auto& replies = m_outgoing;
+
+        m_intf->send(msg, [&replies, &msg]()
+                        {
+                            replies.slow_erase(msg);
+                        }
+                    );
+
+        m_msg_in_flight[Stat] = true;
+    }
+
     bool run()
     {
         if (GetForegroundWindow() == GetConsoleWindow())
@@ -148,6 +173,7 @@ struct client
             m_key[Ping] = GetAsyncKeyState('P') & 0x8000;
             m_key[Fire] = GetAsyncKeyState('F') & 0x8000;
             m_key[Move] = GetAsyncKeyState('M') & 0x8000;
+            m_key[Stat] = GetAsyncKeyState('S') & 0x8000;
             m_key[Quit] = GetAsyncKeyState('Q') & 0x8000;
         }
 
@@ -174,6 +200,11 @@ struct client
         case ConnectionWaiting:
             break;
         case ConnectionComplete:
+            if (m_key[Stat] && !m_old_key[Stat])
+            {
+                get_statistics();
+            }
+
             if (m_key[Ping] && !m_old_key[Ping])
             {
                 m_flood_ping = !m_flood_ping;
@@ -255,9 +286,9 @@ private:
     }                                               m_state{ ConnectionRequested };
     std::vector<uint32_t>                           m_ping_times;
     bool                                            m_flood_ping{ false };
-    bool                                            m_msg_in_flight[3]{ false,false,false };
-    std::array<bool,4>                              m_key{false, false, false, false};
-    std::array<bool, 4>                             m_old_key{false, false, false, false};
+    std::array<bool,5>                              m_msg_in_flight;
+    std::array<bool,5>                              m_key;
+    std::array<bool,5>                              m_old_key;
     bool                                            m_run{ true };
     asionet::protqueue<asionet::message<MsgTypes>>  m_outgoing;
     std::mutex                                      m_state_lock;
@@ -304,6 +335,20 @@ private:
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
                                 m_msg_in_flight[Move] = false;
+                            }
+    },
+    { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m)
+                            {
+                                asionet::stats stat;
+                                
+                                m >> stat;
+
+                                std::cout << "Peak sessions: " << stat.peak_.sessions_ << "\n"
+                                          << "Peak messages: " << stat.peak_.msgs_ << "\n"
+                                          << "Total rx good: " << stat.count_.msgs_rx_good_ << "\n"
+                                          << "Total rx bad : " << stat.count_.msgs_rx_bad_ << "\n";
+
+                                m_msg_in_flight[Stat] = false;
                             }
     }
     };

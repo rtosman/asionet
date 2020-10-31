@@ -145,6 +145,23 @@ private:
                                                 }
                                     );
                                 }
+        },
+        { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m) 
+                                {
+                                    std::cout << "Statistics\n";
+
+                                    auto& reply = m_replies.create_empty_inplace();
+                                    reply.m_header.m_id = m.m_header.m_id;
+                                    reply.m_header.m_size = sizeof(asionet::stats);
+                                    reply << m_intf->statistics();
+                                    auto& replies = m_replies;
+                                    s->write(reply, 
+                                                [&replies, &reply](sess_type s) -> void {
+                                                std::cout << "Statistics reply sent\n";
+                                                replies.slow_erase(reply);
+                                                }
+                                    );
+                                }
         }
     };
 };

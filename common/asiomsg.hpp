@@ -1,6 +1,7 @@
 #ifndef _ASIOMSG_HPP_INCLUDED
 #define _ASIOMSG_HPP_INCLUDED
 #include "asionet.hpp"
+#include "asiobuiltin.hpp"
 #include <botan/auto_rng.h>
 
 namespace asionet 

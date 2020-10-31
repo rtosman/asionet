@@ -48,15 +48,13 @@ namespace asionet
             m_queue.emplace_front(item);
         }
 
-        [[nodiscard]] bool empty()
+        [[nodiscard]] bool empty() const
         {
-            std::scoped_lock lock(m_queue_mutex);
             return m_queue.empty();
         }
 
-        [[nodiscard]] size_t size()
+        [[nodiscard]] size_t size() const
         {
-            std::scoped_lock lock(m_queue_mutex);
             return m_queue.size();
         }
 
