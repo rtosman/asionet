@@ -8,25 +8,38 @@
 #include <map>
 #include "one.hpp"
 
+using namespace std::chrono_literals;
+
 struct client
 {
-#if 0 // no encryption synchronous read
-    using sess = asionet::client_interface<MsgTypes, false, false>::sess;
-    using interface = asionet::client_interface<MsgTypes, false>;
+#if 0 // no encryption asynchronous read
+    using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
+    using interface_type = asionet::client_interface<MsgTypes, false, true>;
+    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, false>>;
 #else // encryption + async read 
-    using sess = asionet::client_interface<MsgTypes>::sess;
-    using interface = asionet::client_interface<MsgTypes>;
+    using sess_type = std::shared_ptr<asionet::session<MsgTypes>>;
+    using interface_type = asionet::client_interface<MsgTypes>;
+    using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, true>>;
 #endif
-    using apifunc = std::function<void(sess s, asionet::message<MsgTypes>&)>;
+    using apifunc_type = std::function<void(sess_type s, asionet::message<MsgTypes>&)>;
+
+
+    const int Ping = 0;
+    const int Fire = 1;
+    const int Move = 2;
+    const int Stat = 3;
+    const int Quit = 4;
+    const int Capture = 5;
 
     client():
-        m_intf(std::make_unique<interface>(m_context,
-                                            [this]()
+        m_intf(std::make_unique<interface_type>(m_context,
+                                            [this](queue_type& queue)
                                             {
-                                                auto m = m_intf->incoming().pop_front();
+                                                auto& m = queue.front();
                                                 m_apis[clamp_msg_types(m.m_msg.api())](m.m_remote, m.m_msg);
+                                                queue.pop_front();
                                             },
-                                            [](sess s)
+                                            [](sess_type s)
                                             {
                                                 std::cout << "Connection dropped\n";
                                             }
@@ -52,9 +65,12 @@ struct client
         auto& msg = m_outgoing.create_empty_inplace();
 
         msg.m_header.m_id = MsgTypes::Connected;
-        m_intf->send(msg, [this, &msg]()
+
+        auto& replies = m_outgoing;
+
+        m_intf->send(msg, [&replies, &msg]()
             {
-                remove_sent(msg);
+                replies.slow_erase(msg);
             });
     }
 
@@ -62,7 +78,7 @@ struct client
     {
         std::scoped_lock lock(m_state_lock);
 
-        if (m_ping_in_transit)
+        if (m_msg_in_flight[Ping])
         {
             return;
         }
@@ -71,37 +87,62 @@ struct client
 
         msg.m_header.m_id = MsgTypes::Ping;
         msg << t;
-        m_intf->send(msg, [this, &msg]()
+
+        auto& replies = m_outgoing;
+        m_intf->send(msg, [&replies, &msg]()
             {
-                remove_sent(msg);
+                replies.slow_erase(msg);
             });
 
-        m_ping_in_transit = true;
+        m_msg_in_flight[Ping] = true;
     }
 
     void fire_bullet(float x, float y)
     {
+        std::scoped_lock lock(m_state_lock);
+
+        if (m_msg_in_flight[Fire])
+        {
+            return;
+        }
+
         auto& msg = m_outgoing.create_empty_inplace();
 
         msg.m_header.m_id = MsgTypes::FireBullet;
         msg << x << y;
-        m_intf->send(msg, [this, &msg]()
+
+        auto& replies = m_outgoing;
+        m_intf->send(msg, [&replies, &msg]()
             {
-                remove_sent(msg);
+                replies.slow_erase(msg);
             });
+
+        m_msg_in_flight[Fire] = true;
     }
 
     void move_player(double x, double y)
     {
+        std::scoped_lock lock(m_state_lock);
+
+        if (m_msg_in_flight[Move])
+        {
+            return;
+        }
+
         auto& msg = m_outgoing.create_empty_inplace();
 
         msg.m_header.m_id = MsgTypes::MovePlayer;
         msg << x << y;
-        m_intf->send(msg, [this, &msg]() 
+
+        auto& replies = m_outgoing;
+
+        m_intf->send(msg, [&replies, &msg]()
                         {
-                remove_sent(msg);
+                            replies.slow_erase(msg);
                         }
                     );
+
+        m_msg_in_flight[Move] = true;
     }
 
     void capture_flag(uint8_t a,
@@ -118,9 +159,11 @@ struct client
         msg.m_header.m_id = MsgTypes::CaptureTheFlag;
         msg << a << b << c << d << e << f << g << m_cdf;
 
-        m_intf->send(msg, [this, &msg]() 
+        auto& replies = m_outgoing;
+
+        m_intf->send(msg, [&replies, &msg]() 
                         {
-                remove_sent(msg);
+                            replies.slow_erase(msg);
                         }
                     );
 
@@ -432,19 +475,38 @@ struct client
         // redamage capture_flag here
     }
 
+    void get_statistics()
+    {
+        std::scoped_lock lock(m_state_lock);
+
+        if (m_msg_in_flight[Stat])
+        {
+            return;
+        }
+
+        auto& msg = m_outgoing.create_empty_inplace();
+
+        msg.m_header.m_id = MsgTypes::Statistics;
+
+        auto& replies = m_outgoing;
+
+        m_intf->send(msg, [&replies, &msg]()
+                        {
+                            replies.slow_erase(msg);
+                        }
+                    );
+
+        m_msg_in_flight[Stat] = true;
+    }
+
     bool run()
     {
-        const int Ping = 0;
-        const int Fire = 1;
-        const int Move = 2;
-        const int Quit = 3;
-        const int Capture = 4;
-
         if (GetForegroundWindow() == GetConsoleWindow())
         {
             m_key[Ping] = GetAsyncKeyState('P') & 0x8000;
             m_key[Fire] = GetAsyncKeyState('F') & 0x8000;
             m_key[Move] = GetAsyncKeyState('M') & 0x8000;
+            m_key[Stat] = GetAsyncKeyState('S') & 0x8000;
             m_key[Quit] = GetAsyncKeyState('Q') & 0x8000;
             m_key[Capture] = GetAsyncKeyState(ascii_capital_k()) & 0x8000;
         }
@@ -472,6 +534,11 @@ struct client
         case ConnectionWaiting:
             break;
         case ConnectionComplete:
+            if (m_key[Stat] && !m_old_key[Stat])
+            {
+                get_statistics();
+            }
+
             if (m_key[Ping] && !m_old_key[Ping])
             {
                 m_flood_ping = !m_flood_ping;
@@ -484,6 +551,7 @@ struct client
                     std::cout << "Flood ping [OFF]\n";
                 }
             }
+
             if (m_key[Fire] && !m_old_key[Fire])
             {
                 std::string x,y;
@@ -516,6 +584,7 @@ struct client
                 }
                 --m_ctf_readiness;
             }
+
             break;
         }
 
@@ -525,8 +594,8 @@ struct client
     }
 
 private:
-    asio::io_context                    m_context;
-    std::unique_ptr<interface>          m_intf;
+    asio::io_context                         m_context;
+    std::unique_ptr<interface_type>          m_intf;
     enum {
         ConnectionRequested,
         ConnectionMade,
@@ -535,28 +604,28 @@ private:
     }                                               m_state{ ConnectionRequested };
     std::vector<uint32_t>                           m_ping_times;
     bool                                            m_flood_ping{ false };
-    bool                                            m_ping_in_transit{ false };
-    std::array<bool, 5>                             m_key{false, false, false, false, false};
-    std::array<bool, 5>                             m_old_key{false, false, false, false, false};
+    std::array<bool, 6>                             m_msg_in_flight{};
+    std::array<bool, 6>                             m_key{};
+    std::array<bool, 6>                             m_old_key{};
     bool                                            m_run{ true };
     asionet::protqueue<asionet::message<MsgTypes>>  m_outgoing;
     std::mutex                                      m_state_lock;
     int                                             m_ctf_readiness{0};
-    uint8_t                                         m_cdf{0};
+    uint8_t                                         m_cdf{ 0 };
 
-    std::map<MsgTypes, apifunc> m_apis = {
-    { MsgTypes::Invalid, [](sess s, asionet::message<MsgTypes>& m)
+    std::map<MsgTypes, apifunc_type> m_apis = {
+    { MsgTypes::Invalid, [](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cerr << "Invalid message received\n";
                             }
     },
-    { MsgTypes::Connected, [this](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::Connected, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "Connected \n";
                                 m_state = ConnectionComplete;
                             }
     },
-    { MsgTypes::Ping, [this](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::Ping, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
                                 std::chrono::system_clock::time_point t;
@@ -571,24 +640,41 @@ private:
                                               << "us (calculated over " << m_ping_times.size() << " samples)\n";
                                     m_ping_times.clear();
                                 }
-                                m_ping_in_transit = false;
+                                m_msg_in_flight[Ping] = false;
                             }
     },
-    { MsgTypes::FireBullet, [this](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::FireBullet, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 --m_ctf_readiness;
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
+                                m_msg_in_flight[Fire] = false;
                             }
     },
-    { MsgTypes::MovePlayer, [this](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::MovePlayer, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 ++m_ctf_readiness;
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
+                                m_msg_in_flight[Move] = false;
                             }
     },
-    { MsgTypes::CaptureTheFlag, [](sess s, asionet::message<MsgTypes>& m)
+    { MsgTypes::CaptureTheFlag, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
+                                m_msg_in_flight[Capture] = false;
+                            }
+    },
+    { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m)
+                            {
+                                asionet::stats stat;
+                                
+                                m >> stat;
+
+                                std::cout << "Peak sessions: " << stat.peak_.sessions_ << "\n"
+                                          << "Peak messages: " << stat.peak_.msgs_ << "\n"
+                                          << "Total rx good: " << stat.count_.msgs_rx_good_ << "\n"
+                                          << "Total rx bad : " << stat.count_.msgs_rx_bad_ << "\n";
+
+                                m_msg_in_flight[Stat] = false;
                             }
     }
     };
@@ -599,13 +685,6 @@ private:
         return encrypted_content;
     }
 
-    void remove_sent(asionet::message<MsgTypes>& msg)
-    {
-        for (auto i = m_outgoing.begin(); i != m_outgoing.end(); )
-        {
-            (&(*i) == &msg) ? i = m_outgoing.erase(i) : ++i;
-        }
-    }
  };
 
 int main(int argc, char** argv)

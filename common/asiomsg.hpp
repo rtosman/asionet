@@ -1,6 +1,7 @@
 #ifndef _ASIOMSG_HPP_INCLUDED
 #define _ASIOMSG_HPP_INCLUDED
 #include "asionet.hpp"
+#include "asiobuiltin.hpp"
 #include <botan/auto_rng.h>
 
 namespace asionet 
@@ -32,12 +33,40 @@ namespace asionet
             }
         }
 
-       BodyType& body()
+        message(const message<T>& other)
+        {
+            if(this == &other) return;
+
+            this->m_body = other.m_body;
+            this->m_header = other.m_header;
+        }
+
+        message(message<T>&& other)
+        {
+            if(this == &other) return;
+
+            this->m_body = other.m_body;
+            this->m_header = other.m_header;
+
+            other.blank();
+        }
+
+        message<T>& operator=(const message<T>& other)
+        {
+            if(this == &other) return *this;
+
+            this->m_body = other.m_body;
+            this->m_header = other.m_header;
+
+            return *this;
+        }
+
+        BodyType& body()
         {
             return m_body;
         }
 
-        [[nodiscard]] T& api()
+        [[nodiscard]] T api() const
         {
             return m_header.m_id;
         }
@@ -94,21 +123,55 @@ namespace asionet
     {
         std::shared_ptr<session<T, Encrypt>>        m_remote;
         message<T>                                  m_msg;
-
+        
         owned_message(message_header<T>& hdr, std::shared_ptr<session<T, Encrypt>> remote):
                             m_remote(remote),
                             m_msg(hdr)
         {
-
+//            std::cout << "owned_msg constructed with header\n";
         }
 
         owned_message(message<T>& msg, std::shared_ptr<session<T, Encrypt>> remote):
                             m_remote(remote),
                             m_msg(msg)
         {
+//            std::cout << "owned_msg constructed with msg\n";
+        }
+
+        owned_message(const owned_message<T, Encrypt>& other)
+        {
+            if(this == &other) return;
+
+            this->m_remote = other.m_remote;
+            this->m_msg = other.m_msg;
+            std::cout << "owned_msg copy constructed\n";
+        }
+
+        owned_message(owned_message<T, Encrypt>&& other)
+        {
+            if(this == &other) return;
+
+            this->m_remote = other.m_remote;
+            this->m_msg = other.m_msg;
+
+            other.m_remote = nullptr;
+            other.m_msg.blank();
+            std::cout << "owned_msg move constructed\n";
 
         }
 
+        // ~owned_message()
+        // {
+        //     std::cout << "owned message destroyed: " << this << "\n";
+        // }
+
+        owned_message<T, Encrypt>& operator=(const owned_message<T, Encrypt>& other)
+        {
+            if(this == &other) return *this;
+
+            this->m_remote = other.m_remote;
+            this->m_msg = other.m_msg;
+        }
 //        friend std::ostream& operator<<(std::ostream& os, const owned_message<T>& msg)
 //        {
 //            os << msg.msg;

@@ -9,6 +9,7 @@ enum class MsgTypes: uint32_t
     Ping,
     FireBullet,
     MovePlayer,
+    Statistics,
     CaptureTheFlag,
     NumEnumElements
 };
@@ -22,5 +23,6 @@ MsgTypes clamp_msg_types(MsgTypes id)
     }
     return MsgTypes::Invalid;
 }
+
 
 #endif

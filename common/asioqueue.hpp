@@ -23,40 +23,38 @@ namespace asionet
             return m_queue.end();
         }
 
-        const T& front()
+        [[nodiscard]] T& front()
         {
             std::scoped_lock lock(m_queue_mutex);
             return m_queue.front();
         }
 
-        const T& back()
+        [[nodiscard]] T& back()
         {
             std::scoped_lock lock(m_queue_mutex);
             return m_queue.back();
         }
 
-        void push_back(const T& item)
+        void push_back(T& item)
         {
             std::scoped_lock lock(m_queue_mutex);
-            m_queue.emplace_back(std::move(item));
+            m_queue.emplace_back(item);
 
         }
 
-        void push_front(const T& item)
+        void push_front(T& item)
         {
             std::scoped_lock lock(m_queue_mutex);
-            m_queue.emplace_front(std::move(item));
+            m_queue.emplace_front(item);
         }
 
-        [[nodiscard]] bool empty()
+        [[nodiscard]] bool empty() const
         {
-            std::scoped_lock lock(m_queue_mutex);
             return m_queue.empty();
         }
 
-        [[nodiscard]] size_t size()
+        [[nodiscard]] size_t size() const
         {
-            std::scoped_lock lock(m_queue_mutex);
             return m_queue.size();
         }
 
@@ -66,20 +64,16 @@ namespace asionet
             m_queue.clear();
         }
 
-        [[nodiscard]] T pop_front()
+        void pop_front()
         {
             std::scoped_lock lock(m_queue_mutex);
-            auto t = std::move(m_queue.front());
             m_queue.pop_front();
-            return t;
         }
 
-        [[nodiscard]] T pop_back()
+        void pop_back()
         {
             std::scoped_lock lock(m_queue_mutex);
-            auto t = std::move(m_queue.back());
             m_queue.pop_back();
-            return t;
         }
 
         typename std::deque<T>::iterator erase(typename std::deque<T>::const_iterator i)
@@ -103,15 +97,16 @@ namespace asionet
             return m_queue.emplace_back();
         }
 
-        [[nodiscard]] T& create_inplace(const T& item)
+        template <typename ...Args>
+        [[nodiscard]] T& create_inplace(Args&& ...args)
         {
             std::scoped_lock lock(m_queue_mutex);
-            return m_queue.emplace_back(std::move(item));
+            return m_queue.emplace_back(std::forward<Args>(args)...);
         }
 
     protected:
-            std::mutex      m_queue_mutex;
-            std::deque<T>   m_queue;
+            std::mutex                      m_queue_mutex;
+            std::deque<T>                   m_queue;
     };
 }
 #endif

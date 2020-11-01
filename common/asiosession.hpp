@@ -9,7 +9,9 @@
 
 namespace asionet 
 {
-    template <uint8_t BlockSize = 16>
+    const int AESBlockSize = 16;
+
+    template <uint8_t BlockSize = AESBlockSize>
     uint32_t crypto_align(uint32_t size)
     {
         return size + (BlockSize - (size % BlockSize));
@@ -62,7 +64,10 @@ namespace asionet
 
         void start()
         {
-            m_socket.async_read_some(asio::buffer((uint8_t*)&m_data, 
+            std::scoped_lock lock(m_mutex); 
+
+            m_established = true;
+            m_socket.async_read_some(asio::buffer((uint8_t*)&m_data,
                                                 sizeof(m_data)
                                                 ),
                                     std::bind(&session::handle_read_complete, 
@@ -81,7 +86,6 @@ namespace asionet
                 {
                     if (!ec)
                     {
-                        m_established = true;
                         start();
                     }
                 });
@@ -98,8 +102,19 @@ namespace asionet
             return true; // TODO
         };
         
+        // bool is_all_zeros(uint8_t* data, size_t size)
+        // {
+        //     int i;
+
+        //     for(i=0; *data == 0 && i < size; ++data);
+
+        //     return i == size? true: false;
+        // }
+
         void write(message<T>& msg, wr_cb cb)
         {
+            std::scoped_lock lock(m_mutex); 
+
             if constexpr (Encrypt)
             {
                 if(msg.m_header.m_size)
@@ -109,7 +124,11 @@ namespace asionet
                     std::memcpy(&msg.m_header.m_iv[0], iv.data(), iv.size());
 
                     m_enc->start(iv);
-                    m_enc->finish(msg.body());                    
+                    m_enc->finish(msg.body());   
+                    // if(is_all_zeros(msg.body().data(), msg.body().size()))
+                    // {
+                    //     std::cout << "sending body of zero\n";
+                    // }                 
                 }
             }
             asio::async_write(m_socket,
@@ -124,23 +143,36 @@ namespace asionet
             );
         }
 
-        void decrypt(owned_message<T>* owned_msg)
+        void decrypt(message<T>& msg)
         {
-            Botan::secure_vector<uint8_t> iv(&owned_msg->m_msg.m_header.m_iv[0],
-                                             &owned_msg->m_msg.m_header.m_iv[16]);
-            m_dec->start(iv);
-            m_dec->finish(owned_msg->m_msg.body());
+            try
+            {
+                std::scoped_lock lock(m_mutex); 
+
+                Botan::secure_vector<uint8_t> iv(&msg.m_header.m_iv[0],
+                                                 &msg.m_header.m_iv[16]);
+                m_dec->start(iv);
+                m_dec->finish(msg.body());
+            }
+            catch (Botan :: Decoding_Error & e)  
+            {
+                std::cout << "Decoding error: " << e.what () 
+                          << " msg ["
+                          << Botan::hex_encode(msg.body()) 
+                          << "] unencrypted length: " << msg.m_header.m_size
+                          << " encrypted length: " << msg.body().size() 
+                          << "\n";  
+                exit(1);
+            }  
         }
 
-
-        private:
+    private:
         void handle_read_complete(const asio::error_code& ec,
-                         size_t bytes_transferred)
+                                  size_t bytes_transferred)
         {
             if (!ec)
             {
                 m_mcb(enable_shared::shared_from_this());
-                start(); // we've handled the message, start again
             }
             else
             {
@@ -149,12 +181,14 @@ namespace asionet
         }
 
         void handle_body(uint8_t* data, size_t len, wr_cb cb, 
-                         const asio::error_code& error)
-        {
-            if (!error)
+                         const asio::error_code& ec)
+        {  
+            if (!ec)
             {
                 if (len)
                 {
+                    std::scoped_lock lock(m_mutex); 
+
                     asio::async_write(m_socket,
                         asio::buffer(data, len),
                         std::bind(&session::handle_write_completion,
@@ -171,25 +205,24 @@ namespace asionet
             }
         }
 
-        void handle_write_completion(wr_cb wcb, const asio::error_code& error)
+        void handle_write_completion(wr_cb wcb, const asio::error_code& ec)
         {
-            if (!error)
+            if (!ec)
             {
                 wcb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this());
             }
         }
 
-
-
-    private:
         asio::ip::tcp::socket               m_socket;
         msg_cb                              m_mcb;
         err_cb                              m_ecb;
         asionet::message_header<T>          m_data;
         encrypt_type                        m_enc;
         decrypt_type                        m_dec;
+        std::mutex                          m_mutex;
 
         bool                                m_established{false};
+
     };
 }
 
