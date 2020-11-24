@@ -6,6 +6,7 @@
 #include <botan/cipher_mode.h>
 #include <botan/hex.h>
 #include <cstdint>
+#include <condition_variable>
 
 namespace asionet 
 {
@@ -21,7 +22,7 @@ namespace asionet
     struct session: public std::enable_shared_from_this<session<T, Encrypt>>
     {
         using msg_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
-        using wr_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
+        using wr_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>, const asio::error_code&)>;
         using err_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
         using enable_shared = std::enable_shared_from_this<session<T, Encrypt>>;
         using encrypt_type = std::unique_ptr<Botan::Cipher_Mode>;
@@ -64,18 +65,15 @@ namespace asionet
 
         void start()
         {
-            std::scoped_lock lock(m_mutex); 
-
             m_established = true;
-            m_socket.async_read_some(asio::buffer((uint8_t*)&m_data,
-                                                sizeof(m_data)
-                                                ),
-                                    std::bind(&session::handle_read_complete, 
-                                            enable_shared::shared_from_this(),
-                                            std::placeholders::_1,
-                                            std::placeholders::_2
-                                        )
-                                    );                    
+            asio::async_read(m_socket,
+                             asio::buffer(&m_data, sizeof m_data),
+                                     std::bind(&session::handle_read_complete, 
+                                               enable_shared::shared_from_this(),
+                                               std::placeholders::_1,
+                                               std::placeholders::_2
+                                    )
+                            );                    
         }
 
         void connect(const asio::ip::tcp::resolver::results_type& endpoints)
@@ -102,53 +100,33 @@ namespace asionet
             return true; // TODO
         };
         
-        // bool is_all_zeros(uint8_t* data, size_t size)
-        // {
-        //     int i;
-
-        //     for(i=0; *data == 0 && i < size; ++data);
-
-        //     return i == size? true: false;
-        // }
-
-        void write(message<T>& msg, wr_cb cb)
+        template <typename F1>
+        void send(message<T>& msg, F1 cb)
         {
-            std::scoped_lock lock(m_mutex); 
-
-            if constexpr (Encrypt)
+            std::unique_lock<std::mutex> lock(m_send_mutex);
+            if (m_cv.wait_for(lock, 100ms, [this] { return !m_send_pending; }))
             {
-                if(msg.m_header.m_size)
-                {
-                    Botan::AutoSeeded_RNG rng;
-                    Botan::secure_vector<uint8_t> iv = rng.random_vec(m_enc->default_nonce_length());
-                    std::memcpy(&msg.m_header.m_iv[0], iv.data(), iv.size());
-
-                    m_enc->start(iv);
-                    m_enc->finish(msg.body());   
-                    // if(is_all_zeros(msg.body().data(), msg.body().size()))
-                    // {
-                    //     std::cout << "sending body of zero\n";
-                    // }                 
-                }
+                m_send_pending = true;
+                lock.unlock();
+                write(msg, [this, cb](std::shared_ptr<session<T, Encrypt>> s, const asio::error_code& ec)
+                    {
+                        m_send_mutex.lock();
+                        m_send_pending = false;
+                        m_send_mutex.unlock();
+                        m_cv.notify_all();
+                        cb();
+                    });
             }
-            asio::async_write(m_socket,
-                asio::buffer((uint8_t*)&msg, sizeof(msg.m_header)),
-                std::bind(&session::handle_body,
-                    enable_shared::shared_from_this(),
-                    msg.m_body.data(),
-                    msg.m_body.size(),
-                    cb,
-                    std::placeholders::_1
-                )
-            );
+            else
+            {
+                throw std::exception("(I/O) wait timed out on send");
+            }
         }
 
         void decrypt(message<T>& msg)
         {
             try
             {
-                std::scoped_lock lock(m_mutex); 
-
                 Botan::secure_vector<uint8_t> iv(&msg.m_header.m_iv[0],
                                                  &msg.m_header.m_iv[16]);
                 m_dec->start(iv);
@@ -167,6 +145,32 @@ namespace asionet
         }
 
     private:
+        void write(message<T>& msg, wr_cb cb)
+        {
+            if constexpr (Encrypt)
+            {
+                if (msg.m_header.m_size)
+                {
+                    Botan::AutoSeeded_RNG rng;
+                    Botan::secure_vector<uint8_t> iv = rng.random_vec(m_enc->default_nonce_length());
+                    std::memcpy(&msg.m_header.m_iv[0], iv.data(), iv.size());
+
+                    m_enc->start(iv);
+                    m_enc->finish(msg.body());
+                }
+            }
+            asio::async_write(m_socket,
+                asio::buffer((uint8_t*)&msg, sizeof(msg.m_header)),
+                std::bind(&session::handle_body,
+                    enable_shared::shared_from_this(),
+                    msg.m_body.data(),
+                    msg.m_body.size(),
+                    cb,
+                    std::placeholders::_1
+                )
+            );
+        }
+
         void handle_read_complete(const asio::error_code& ec,
                                   size_t bytes_transferred)
         {
@@ -183,34 +187,26 @@ namespace asionet
         void handle_body(uint8_t* data, size_t len, wr_cb cb, 
                          const asio::error_code& ec)
         {  
-            if (!ec)
+            if (len) // write the body
             {
-                if (len)
-                {
-                    std::scoped_lock lock(m_mutex); 
-
-                    asio::async_write(m_socket,
-                        asio::buffer(data, len),
-                        std::bind(&session::handle_write_completion,
-                            enable_shared::shared_from_this(),
-                            cb,
-                            std::placeholders::_1
-                        )
-                    );
-                }
-                else
-                {
-                    cb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this());
-                }
+                asio::async_write(m_socket,
+                    asio::buffer(data, len),
+                    std::bind(&session::handle_write_completion,
+                        enable_shared::shared_from_this(),
+                        cb,
+                        std::placeholders::_1
+                    )
+                );
+            }
+            else // header only message, we're done
+            {
+                cb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this(), ec);
             }
         }
 
         void handle_write_completion(wr_cb wcb, const asio::error_code& ec)
         {
-            if (!ec)
-            {
-                wcb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this());
-            }
+            wcb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this(), ec);
         }
 
         asio::ip::tcp::socket               m_socket;
@@ -219,10 +215,12 @@ namespace asionet
         asionet::message_header<T>          m_data;
         encrypt_type                        m_enc;
         decrypt_type                        m_dec;
-        std::mutex                          m_mutex;
-
         bool                                m_established{false};
+        std::condition_variable             m_cv;
+        std::mutex                          m_send_mutex;
+        bool                                m_send_pending{ false };
 
+        int                                 m_outstanding_sends{ 0 };
     };
 }
 

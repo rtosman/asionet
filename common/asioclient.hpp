@@ -1,6 +1,5 @@
 #ifndef _ASIOCLIENT_HPP_INCLUDED
 #define _ASIOCLIENT_HPP_INCLUDED
-#include <thread>
 #include "asionet.hpp"
 #include "asioqueue.hpp"
 #include "asiomsg.hpp"
@@ -8,6 +7,8 @@
 #include "one.hpp"
 #include <map>
 #include <cassert>
+
+using namespace std::chrono_literals;
 
 namespace asionet 
 {
@@ -99,10 +100,7 @@ namespace asionet
         template <typename F1>
         void send(message<T>& msg, F1 cb)
         {
-            m_session->write(msg, [cb](sess_type s) 
-                {
-                    cb();
-                });
+            m_session->send(msg, [cb]() {cb();});
         }
 
     private:
@@ -112,7 +110,9 @@ namespace asionet
         std::thread                                                         m_thrctxt;
         std::shared_ptr<session<T, Encrypt>>                                m_session;
         std::map<session<T, Encrypt>*, protqueue<owned_message<T,Encrypt>>> m_msgs;
+        std::condition_variable                                             m_cv;
         std::mutex                                                          m_mutex;
+        bool                                                                m_send_pending{ false };
 
         void read_body_sync(std::shared_ptr<session<T, Encrypt>> s)
         {
@@ -125,16 +125,16 @@ namespace asionet
             } else
                 owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
 
-            s->socket().read_some(asio::buffer(owned_msg.m_msg.body().data(),
-                                               owned_msg.m_msg.body().size()
-                                              )
-                                 );
+            asio::read(s->socket(),
+                       asio::buffer(owned_msg.m_msg.body().data(), owned_msg.m_msg.body().size())
+                      );
+
             if constexpr (Encrypt == true)
             {
                 owned_msg.m_remote->decrypt(owned_msg.m_msg);
             }
 
-            m_msg_ready_cb(m_msgs[s->get()]);
+            m_msg_ready_cb(m_msgs[s.get()]);
             s->start();
         }
 
@@ -153,16 +153,18 @@ namespace asionet
             {
                 // if(m_msgs.size() > 1)
                 //     std::cout << "enqueuing async read body\n";
-                s->socket().async_read_some(asio::buffer(owned_msg.m_msg.body().data(),
-                                                         owned_msg.m_msg.body().size()),
-                    std::bind(&client_interface::handle_read,
-                        this,
-                        &owned_msg,
-                        std::placeholders::_1,
-                        std::placeholders::_2
-                    )
-                );
-            }
+                asio::async_read(s->socket(),
+                                 asio::buffer(owned_msg.m_msg.body().data(),
+                                              owned_msg.m_msg.body().size()
+                                             ),
+                                 std::bind(&client_interface::handle_read,
+                                    this,
+                                    &owned_msg,
+                                    std::placeholders::_1,
+                                    std::placeholders::_2
+                                 )
+                                );
+            } 
             else
             {
                 m_msg_ready_cb(m_msgs[s.get()]);

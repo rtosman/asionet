@@ -8,6 +8,8 @@
 #include <map>
 #include <functional>
 
+using namespace std::chrono_literals;
+
 // to debug define ASIO_ENABLE_HANDLER_TRACKING when building
 namespace asionet
 {
@@ -72,6 +74,12 @@ namespace asionet
             return m_stats;
         }
 
+        template <typename F1>
+        void send(std::shared_ptr<session<T, Encrypt>> s, message<T>& msg, F1 cb)
+        {
+            s->send(msg, [cb]() {cb();});
+        }
+
     private:
         asio::io_context&                                                   m_context;
         uint16_t                                                            m_port;
@@ -82,6 +90,7 @@ namespace asionet
         asio::ip::tcp::socket                                               m_socket;
         asio::ip::tcp::acceptor                                             m_acceptor;
         stats                                                               m_stats;
+
 
         void remove_session(std::shared_ptr<session<T, Encrypt>> s)
         {
@@ -115,7 +124,7 @@ namespace asionet
         void read_body_sync(std::shared_ptr<session<T, Encrypt>> s)
         {
             auto& owned_msg = m_msgs[s.get()].create_inplace(s->get_hdr(), s);
-            
+
             peak_messages();
 
             if constexpr (Encrypt == true)
@@ -125,16 +134,18 @@ namespace asionet
             } else
                 owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
 
-            s->socket().read_some(asio::buffer(owned_msg.m_msg.body().data(),
-                                               owned_msg.m_msg.body().size()
-                                              )
-                                 );
+            asio::read(s->socket(),
+                       asio::buffer(owned_msg.m_msg.body().data(),
+                                    owned_msg.m_msg.body().size()
+                                   )
+                      );
+
             if constexpr (Encrypt == true)
             {
                 owned_msg.m_remote->decrypt(owned_msg.m_msg);
             }
 
-            m_msg_ready_cb(m_msgs[s->get()]);
+            m_msg_ready_cb(m_msgs[s.get()]);
             s->start();
         }
 
@@ -151,14 +162,15 @@ namespace asionet
 
             if (s->get_hdr().m_size)
             {
-                s->socket().async_read_some(asio::buffer(owned_msg.m_msg.body().data(),
-                                                         owned_msg.m_msg.body().size()),
-                    std::bind(&server_interface::handle_read,
-                        this,
-                        &owned_msg,
-                        std::placeholders::_1,
-                        std::placeholders::_2
-                    )
+                asio::async_read(s->socket(),
+                                 asio::buffer(owned_msg.m_msg.body().data(),
+                                              owned_msg.m_msg.body().size()),
+                                 std::bind(&server_interface::handle_read,
+                                            this,
+                                            &owned_msg,
+                                            std::placeholders::_1,
+                                            std::placeholders::_2
+                                          )
                 );
             }
             else
@@ -185,8 +197,7 @@ namespace asionet
 
                 std::shared_ptr<session<T, Encrypt>> s = owned_msg->m_remote;
                 m_msg_ready_cb(m_msgs[s.get()]);
-                s->start(); // we've handled the message, start again
-
+                s->start(); 
             }
             else
             {
