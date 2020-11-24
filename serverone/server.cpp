@@ -10,7 +10,7 @@
 
 struct server
 {
-#if 0 // no encryption asynchronous read
+#if 1 // no encryption asynchronous read
     using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
     using interface_type = asionet::server_interface<MsgTypes, false, true>;
     using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, false>>;
@@ -45,13 +45,14 @@ struct server
 
     bool run()
     {
+//        asio::io_service::work work(m_context);
         m_context.run();
 
         return true;
     }
-
+    asio::io_context                                m_context;
 private:
-    asio::io_context                                m_context; 
+
     asionet::protqueue<asionet::message<MsgTypes>>  m_replies;
     std::unique_ptr<interface_type>                 m_intf;
  
@@ -67,8 +68,8 @@ private:
                                     auto& reply = m_replies.create_inplace(m.m_header);
                                     auto& replies = m_replies;
                                     reply.blank(); // Connected reply has no data
-                                    s->write(reply, 
-                                            [&replies, &reply](sess_type s) -> void 
+                                    m_intf->send(s, reply, 
+                                            [&replies, &reply]() -> void
                                             {
                                                 replies.slow_erase(reply);
                                             }
@@ -81,25 +82,19 @@ private:
 
                                     std::chrono::system_clock::time_point t;
                                     m >> t;
-                                    std::time_t pt = std::chrono::system_clock::to_time_t(t);
-                                    std::tm tm = *std::localtime(&pt);
-                                    ss << std::put_time(&tm, "%c") << "\n";
-                                    if(ss.str().find("10/30/20") == std::string::npos)
-                                    {
-                                        std::cout << ss.str() << "\n";
-                                    }
                                     // for ping, just send back the message as-is for
-                                    // minimal latency, the ping is only a header 
-                                    // so encryption will not be applied
+                                    // minimal latency
                                     auto& reply = m_replies.create_inplace(m.m_header);
                                     reply << t;
-                                    // reply->m_header = m.m_header;
-                                    // reply->m_body = m.m_body;
                                     auto& replies = m_replies;
-                                    s->write(reply, 
-                                                [&replies, &reply](sess_type s) -> void 
+                                    m_intf->send(s, reply,
+                                                [&replies, &reply]() -> void
                                                 {
-                                                replies.slow_erase(reply);
+                                            if (replies.size() > 1)
+                                            {
+                                                std::cout << replies.size() << "\n";
+                                            }
+                                                    replies.slow_erase(reply);
                                                 }
                                     );
                                 }
@@ -117,8 +112,8 @@ private:
                                     reply.m_header.m_id = m.m_header.m_id;
                                     reply << "Fired OK!";
                                     auto& replies = m_replies;
-                                    s->write(reply, 
-                                                [&replies, &reply](sess_type s) -> void 
+                                    m_intf->send(s, reply,
+                                                [&replies, &reply]() -> void
                                                 {
                                                 std::cout << "FireBullet reply sent\n";
                                                 replies.slow_erase(reply);
@@ -139,8 +134,8 @@ private:
                                     reply.m_header.m_id = m.m_header.m_id;
                                     reply << "Moved Player OK!";
                                     auto& replies = m_replies;
-                                    s->write(reply, 
-                                                [&replies, &reply](sess_type s) -> void {
+                                    m_intf->send(s, reply,
+                                                [&replies, &reply]() -> void {
                                                 std::cout << "MovePlayer reply sent\n";
                                                 replies.slow_erase(reply);
                                                 }
@@ -156,8 +151,8 @@ private:
                                     reply.m_header.m_size = sizeof(asionet::stats);
                                     reply << m_intf->statistics();
                                     auto& replies = m_replies;
-                                    s->write(reply, 
-                                                [&replies, &reply](sess_type s) -> void {
+                                    m_intf->send(s, reply,
+                                                [&replies, &reply]() -> void {
                                                 std::cout << "Statistics reply sent\n";
                                                 replies.slow_erase(reply);
                                                 }
@@ -171,7 +166,18 @@ int main(int argc, char** argv)
 {
     server game(atoi(argv[1]));
 
-    game.run();
+    try
+    {
+        game.run();
+    }
+    catch (std::exception& e)
+    {
+        std::stringstream s;
+        s << e.what();
+        s << ", io_context is " << (game.m_context.stopped() ? "stopped":"running") << "\n";
+
+        std::cout << "Error: " << s.str() << "\n";
+    }
 
     std::cout << argv[0] << " exiting...\n";
 
