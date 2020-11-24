@@ -8,11 +8,9 @@
 #include <map>
 #include "one.hpp"
 
-using namespace std::chrono_literals;
-
 struct client
 {
-#if 0 // no encryption asynchronous read
+#if 1 // no encryption asynchronous read
     using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
     using interface_type = asionet::client_interface<MsgTypes, false, true>;
     using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, false>>;
@@ -22,7 +20,6 @@ struct client
     using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, true>>;
 #endif
     using apifunc_type = std::function<void(sess_type s, asionet::message<MsgTypes>&)>;
-
 
     const int Ping = 0;
     const int Fire = 1;
@@ -75,12 +72,9 @@ struct client
 
     void ping(std::chrono::system_clock::time_point t)
     {
-        std::scoped_lock lock(m_state_lock);
+        std::scoped_lock lock(m_mutex);
 
-        if (m_msg_in_flight[Ping])
-        {
-            return;
-        }
+        if (m_ping_inflight) return;
 
         auto& msg = m_outgoing.create_empty_inplace();
 
@@ -93,18 +87,11 @@ struct client
                 replies.slow_erase(msg);
             });
 
-        m_msg_in_flight[Ping] = true;
+        m_ping_inflight = true;
     }
 
     void fire_bullet(float x, float y)
     {
-        std::scoped_lock lock(m_state_lock);
-
-        if (m_msg_in_flight[Fire])
-        {
-            return;
-        }
-
         auto& msg = m_outgoing.create_empty_inplace();
 
         msg.m_header.m_id = MsgTypes::FireBullet;
@@ -115,19 +102,10 @@ struct client
             {
                 replies.slow_erase(msg);
             });
-
-        m_msg_in_flight[Fire] = true;
     }
 
     void move_player(double x, double y)
     {
-        std::scoped_lock lock(m_state_lock);
-
-        if (m_msg_in_flight[Move])
-        {
-            return;
-        }
-
         auto& msg = m_outgoing.create_empty_inplace();
 
         msg.m_header.m_id = MsgTypes::MovePlayer;
@@ -140,19 +118,10 @@ struct client
                             replies.slow_erase(msg);
                         }
                     );
-
-        m_msg_in_flight[Move] = true;
     }
 
     void get_statistics()
     {
-        std::scoped_lock lock(m_state_lock);
-
-        if (m_msg_in_flight[Stat])
-        {
-            return;
-        }
-
         auto& msg = m_outgoing.create_empty_inplace();
 
         msg.m_header.m_id = MsgTypes::Statistics;
@@ -164,8 +133,6 @@ struct client
                             replies.slow_erase(msg);
                         }
                     );
-
-        m_msg_in_flight[Stat] = true;
     }
 
     bool run()
@@ -195,7 +162,7 @@ struct client
         case ConnectionRequested:
             if (is_connected()) m_state = ConnectionMade;
             break;
-        case ConnectionMade:
+        case ConnectionMade: // let the server know that I know that the server knows that I am connected 
             acknowledge_connection();
             m_state = ConnectionWaiting;
             break;
@@ -239,7 +206,6 @@ struct client
             {
                 m_last_transition = std::chrono::system_clock::now();                
                 m_auto_repeat[Fire] = false;
-                m_msg_in_flight[Fire] = false;
             }
             else if(m_key[Fire] && m_auto_repeat[Fire])
             {
@@ -262,7 +228,6 @@ struct client
             {
                 m_last_transition = std::chrono::system_clock::now();                
                 m_auto_repeat[Move] = false;
-                m_msg_in_flight[Move] = false;
             }
             else if(m_key[Move] && m_auto_repeat[Move])
             {
@@ -288,14 +253,14 @@ private:
     }                                               m_state{ ConnectionRequested };
     std::vector<uint32_t>                           m_ping_times;
     bool                                            m_flood_ping{ false };
-    std::array<bool,5>                              m_msg_in_flight;
-    std::array<bool,5>                              m_key;
-    std::array<bool,5>                              m_old_key;
+    std::array<bool, 5>                             m_key{};
+    std::array<bool, 5>                             m_old_key{};
     bool                                            m_run{ true };
     asionet::protqueue<asionet::message<MsgTypes>>  m_outgoing;
-    std::mutex                                      m_state_lock;
     std::chrono::system_clock::time_point           m_last_transition;
-    bool                                            m_auto_repeat[3]{false,false,false};
+    std::array<bool, 5>                             m_auto_repeat{};
+    bool                                            m_ping_inflight{ false };
+    std::mutex                                      m_mutex{};
 
     std::map<MsgTypes, apifunc_type> m_apis = {
     { MsgTypes::Invalid, [](sess_type s, asionet::message<MsgTypes>& m)
@@ -305,17 +270,18 @@ private:
     },
     { MsgTypes::Connected, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
+                                // The server knows that I know that the server knows that I'm connected
                                 std::cout << "Connected \n";
                                 m_state = ConnectionComplete;
                             }
     },
     { MsgTypes::Ping, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
+                                std::scoped_lock lock(m_mutex);
                                 std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
                                 std::chrono::system_clock::time_point t;
                                 m >> t;
                                 auto deltaus = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<double>(now - t));
-                                std::scoped_lock lock(m_state_lock);
                                 m_ping_times.emplace_back(static_cast<uint32_t>(deltaus.count()));
                                 if (m_ping_times.size() >= 1000)
                                 {
@@ -324,22 +290,21 @@ private:
                                               << "us (calculated over " << m_ping_times.size() << " samples)\n";
                                     m_ping_times.clear();
                                 }
-                                m_msg_in_flight[Ping] = false;
+
+                                m_ping_inflight = false;
                             }
     },
-    { MsgTypes::FireBullet, [this](sess_type s, asionet::message<MsgTypes>& m)
+    { MsgTypes::FireBullet, [](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
-                                m_msg_in_flight[Fire] = false;
                             }
     },
-    { MsgTypes::MovePlayer, [this](sess_type s, asionet::message<MsgTypes>& m)
+    { MsgTypes::MovePlayer, [](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 std::cout << "response id = " << (uint32_t)m.m_header.m_id << " body is [" << (char*)m.m_body.data() << "]\n";
-                                m_msg_in_flight[Move] = false;
                             }
     },
-    { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m)
+    { MsgTypes::Statistics, [](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 asionet::stats stat;
                                 
@@ -349,8 +314,6 @@ private:
                                           << "Peak messages: " << stat.peak_.msgs_ << "\n"
                                           << "Total rx good: " << stat.count_.msgs_rx_good_ << "\n"
                                           << "Total rx bad : " << stat.count_.msgs_rx_bad_ << "\n";
-
-                                m_msg_in_flight[Stat] = false;
                             }
     }
     };
@@ -361,9 +324,16 @@ int main(int argc, char** argv)
 {
     client c;
     
-    c.connect(argv[1], atoi(argv[2]));
+    try
+    {
+        c.connect(argv[1], atoi(argv[2]));
 
-    while (c.run());
+        while (c.run());
+    }
+    catch (std::exception& e)
+    {
+        std::cout << "Error: " << e.what() << "\n";
+    }
 
     return 0;
 }
