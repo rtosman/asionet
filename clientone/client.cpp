@@ -10,9 +10,9 @@
 
 struct client
 {
-#if 1 // no encryption asynchronous read
+#if 0 // no encryption asynchronous read
     using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
-    using interface_type = asionet::client_interface<MsgTypes, false, true>;
+    using interface_type = asionet::client_interface<MsgTypes, false>;
     using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, false>>;
 #else // encryption + async read 
     using sess_type = std::shared_ptr<asionet::session<MsgTypes>>;

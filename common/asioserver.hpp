@@ -13,7 +13,7 @@ using namespace std::chrono_literals;
 // to debug define ASIO_ENABLE_HANDLER_TRACKING when building
 namespace asionet
 {
-    template <typename T, bool Encrypt=true, bool Async=true>
+    template <typename T, bool Encrypt=true>
     struct server_interface
     {
         using new_connection_notification_cb = std::function<bool(std::shared_ptr<session<T, Encrypt>>)>;
@@ -91,7 +91,6 @@ namespace asionet
         asio::ip::tcp::acceptor                                             m_acceptor;
         stats                                                               m_stats;
 
-
         void remove_session(std::shared_ptr<session<T, Encrypt>> s)
         {
             auto it = m_msgs.find(s.get());
@@ -121,35 +120,7 @@ namespace asionet
             }
         }
 
-        void read_body_sync(std::shared_ptr<session<T, Encrypt>> s)
-        {
-            auto& owned_msg = m_msgs[s.get()].create_inplace(s->get_hdr(), s);
-
-            peak_messages();
-
-            if constexpr (Encrypt == true)
-            {
-                owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
-                assert(owned_msg.m_msg.body().size() >= AESBlockSize);
-            } else
-                owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
-
-            asio::read(s->socket(),
-                       asio::buffer(owned_msg.m_msg.body().data(),
-                                    owned_msg.m_msg.body().size()
-                                   )
-                      );
-
-            if constexpr (Encrypt == true)
-            {
-                owned_msg.m_remote->decrypt(owned_msg.m_msg);
-            }
-
-            m_msg_ready_cb(m_msgs[s.get()]);
-            s->start();
-        }
-
-        void read_body_async(std::shared_ptr<session<T, Encrypt>> s)
+        void read_body(std::shared_ptr<session<T, Encrypt>> s)
         {
             auto& owned_msg = m_msgs[s.get()].create_inplace(s->get_hdr(), s);
 
@@ -216,24 +187,14 @@ namespace asionet
         {
             std::shared_ptr<asionet::session<T, Encrypt>> s;
 
-            if constexpr (Async == true)
-                s = std::make_shared<session<T, Encrypt>>(m_context,
-                                     std::bind(&server_interface::read_body_async,
-                                               this,
-                                               std::placeholders::_1),
-                                     std::bind(&server_interface::disconnect,
-                                               this,
-                                               std::placeholders::_1)
-                                                         );
-            else
-                s = std::make_shared<session<T, Encrypt>>(m_context,
-                                     std::bind(&server_interface::read_body_sync,
-                                               this,
-                                               std::placeholders::_1),
-                                     std::bind(&server_interface::disconnect,
-                                               this,
-                                               std::placeholders::_1)
-                                                         );
+            s = std::make_shared<session<T, Encrypt>>(m_context,
+                                    std::bind(&server_interface::read_body,
+                                            this,
+                                            std::placeholders::_1),
+                                    std::bind(&server_interface::disconnect,
+                                            this,
+                                            std::placeholders::_1)
+                                                        );
 
             m_acceptor.async_accept(s->socket(),
                 std::bind(&server_interface::handle_accept,

@@ -10,9 +10,9 @@
 
 struct server
 {
-#if 1 // no encryption asynchronous read
+#if 0 // no encryption asynchronous read
     using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
-    using interface_type = asionet::server_interface<MsgTypes, false, true>;
+    using interface_type = asionet::server_interface<MsgTypes, false>;
     using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, false>>;
 #else // encryption + async read 
     using sess_type = std::shared_ptr<asionet::session<MsgTypes>>;
@@ -45,14 +45,18 @@ struct server
 
     bool run()
     {
-//        asio::io_service::work work(m_context);
         m_context.run();
 
         return true;
     }
-    asio::io_context                                m_context;
-private:
 
+    bool stopped()
+    {
+        return m_context.stopped();
+    }
+
+private:
+    asio::io_context                                m_context;
     asionet::protqueue<asionet::message<MsgTypes>>  m_replies;
     std::unique_ptr<interface_type>                 m_intf;
  
@@ -90,10 +94,6 @@ private:
                                     m_intf->send(s, reply,
                                                 [&replies, &reply]() -> void
                                                 {
-                                            if (replies.size() > 1)
-                                            {
-                                                std::cout << replies.size() << "\n";
-                                            }
                                                     replies.slow_erase(reply);
                                                 }
                                     );
@@ -174,7 +174,7 @@ int main(int argc, char** argv)
     {
         std::stringstream s;
         s << e.what();
-        s << ", io_context is " << (game.m_context.stopped() ? "stopped":"running") << "\n";
+        s << ", io_context is " << (game.stopped() ? "stopped":"running") << "\n";
 
         std::cout << "Error: " << s.str() << "\n";
     }

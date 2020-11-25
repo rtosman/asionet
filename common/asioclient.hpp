@@ -12,7 +12,7 @@ using namespace std::chrono_literals;
 
 namespace asionet 
 {
-    template <typename T, bool Encrypt=true, bool Async=true>
+    template <typename T, bool Encrypt=true>
     struct client_interface
     {
         using sess_type = std::shared_ptr<asionet::session<T, Encrypt>>;
@@ -45,22 +45,13 @@ namespace asionet
                 asio::ip::tcp::resolver resolver(m_context);
                 asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(server, std::to_string(port));
 
-                if constexpr (Async == true)
-                    m_session = std::make_shared<session<T, Encrypt>>(m_context,
-                                        std::bind(&client_interface::read_body_async,
-                                                this,
-                                                std::placeholders::_1),
-                                        std::bind(&client_interface::disconnect,
-                                                  this)
-                                );
-                else
-                    m_session = std::make_shared<session<T, Encrypt>>(m_context,
-                                     std::bind(&client_interface::read_body_sync,
-                                               this,
-                                               std::placeholders::_1),
-                                     std::bind(&client_interface::disconnect,
-                                               this)
-                                );
+                m_session = std::make_shared<session<T, Encrypt>>(m_context,
+                                    std::bind(&client_interface::read_body,
+                                            this,
+                                            std::placeholders::_1),
+                                    std::bind(&client_interface::disconnect,
+                                                this)
+                            );
 
                 m_session->connect(endpoints);
 
@@ -114,31 +105,7 @@ namespace asionet
         std::mutex                                                          m_mutex;
         bool                                                                m_send_pending{ false };
 
-        void read_body_sync(std::shared_ptr<session<T, Encrypt>> s)
-        {
-            auto& owned_msg = m_msgs[s.get()].create_inplace(s->get_hdr(), s);
-
-            if constexpr (Encrypt == true)
-            {
-                owned_msg.m_msg.body().resize(asionet::crypto_align(owned_msg.m_msg.m_header.m_size));
-                assert(owned_msg.m_msg.body().size() >= AESBlockSize);
-            } else
-                owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
-
-            asio::read(s->socket(),
-                       asio::buffer(owned_msg.m_msg.body().data(), owned_msg.m_msg.body().size())
-                      );
-
-            if constexpr (Encrypt == true)
-            {
-                owned_msg.m_remote->decrypt(owned_msg.m_msg);
-            }
-
-            m_msg_ready_cb(m_msgs[s.get()]);
-            s->start();
-        }
-
-        void read_body_async(std::shared_ptr<session<T, Encrypt>> s)
+        void read_body(std::shared_ptr<session<T, Encrypt>> s)
         {
             auto& owned_msg = m_msgs[s.get()].create_inplace(s->get_hdr(), s);
 
