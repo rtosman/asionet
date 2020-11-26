@@ -92,8 +92,6 @@ namespace asionet
         asio::ip::tcp::socket                                               m_socket;
         asio::ip::tcp::acceptor                                             m_acceptor;
         stats                                                               m_stats;
-        std::tuple<std::shared_ptr<uint8_t>, size_t>                        m_cur_challenge;
-        bool                                                                m_valid{false};
 
         std::tuple<std::shared_ptr<uint8_t>, size_t> init_challenge(uint8_t* space, size_t amount)
         {
@@ -108,7 +106,7 @@ namespace asionet
 
         unsigned char verify_response(std::shared_ptr<session<T, Encrypt>> s, 
                                       uint8_t* resp, 
-                                      std::tuple<std::shared_ptr<uint8_t>, size_t>& answer)
+                                      const std::tuple<std::shared_ptr<uint8_t>, size_t>& answer)
         {
             s->decrypt(&resp[0],std::get<1>(answer));
             return memcmp(&resp[0], std::get<0>(answer).get(), std::get<1>(answer));
@@ -123,8 +121,10 @@ namespace asionet
                 // the IV field in the header is used to supply
                 // the random data for the challenge
                 std::shared_ptr<message<T>> auth(new message<T>());
-                m_cur_challenge = init_challenge(&auth->m_header.m_iv[0], 
-                                                 sizeof(auth->m_header.m_iv)); 
+                existing->current_challenge(init_challenge(&auth->m_header.m_iv[0], 
+                                                           sizeof(auth->m_header.m_iv)
+                                                          )
+                                           ); 
                 existing->send(*auth,
                     [&existing, &tmout, this]() -> void
                     {
@@ -139,9 +139,8 @@ namespace asionet
                         {
                             if (verify_response(existing, 
                                                 reinterpret_cast<uint8_t*>(&resp.m_iv),
-                                                m_cur_challenge) == 0)
+                                                existing->current_challenge()) == 0)
                             {
-                                m_valid = true;
                                 existing->start();
                             }
                         }

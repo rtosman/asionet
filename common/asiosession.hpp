@@ -20,7 +20,7 @@ namespace asionet
     }
 
     template <typename T, bool Encrypt>
-    struct session: public std::enable_shared_from_this<session<T, Encrypt>>
+    struct session : public std::enable_shared_from_this<session<T, Encrypt>>
     {
         using msg_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>)>;
         using wr_cb = std::function<void(std::shared_ptr<session<T, Encrypt>>, const asio::error_code&)>;
@@ -29,11 +29,11 @@ namespace asionet
         using encrypt_type = std::unique_ptr<Botan::Cipher_Mode>;
         using decrypt_type = std::unique_ptr<Botan::Cipher_Mode>;
 
-        session(asio::io_context& ctxt, 
-                msg_cb mcb, err_cb ecb,
-                std::vector<uint8_t> key=Botan::hex_decode("2B7E151628AED2A6ABF7158809CF4F3C"))
-            : m_socket(ctxt), 
-              m_mcb(mcb), m_ecb(ecb) 
+        session(asio::io_context& ctxt,
+            msg_cb mcb, err_cb ecb,
+            std::vector<uint8_t> key = Botan::hex_decode("2B7E151628AED2A6ABF7158809CF4F3C"))
+            : m_socket(ctxt),
+            m_mcb(mcb), m_ecb(ecb)
         {
             if constexpr (Encrypt == true)
             {
@@ -59,7 +59,7 @@ namespace asionet
             return m_socket;
         }
 
-        message_header<T>& get_hdr()
+        const message_header<T>& get_hdr() const
         {
             return m_data;
         }
@@ -68,13 +68,13 @@ namespace asionet
         {
             m_established = true;
             asio::async_read(m_socket,
-                             asio::buffer(&m_data, sizeof m_data),
-                                     std::bind(&session::handle_read_complete, 
-                                               enable_shared::shared_from_this(),
-                                               std::placeholders::_1,
-                                               std::placeholders::_2
-                                    )
-                            );                    
+                asio::buffer(&m_data, sizeof m_data),
+                std::bind(&session::handle_read_complete,
+                    enable_shared::shared_from_this(),
+                    std::placeholders::_1,
+                    std::placeholders::_2
+                )
+            );
         }
 
         template <typename F1>
@@ -91,7 +91,7 @@ namespace asionet
                 });
         };
 
-        bool is_connected()
+        bool is_connected() const
         {
             return m_established;
         }
@@ -101,7 +101,7 @@ namespace asionet
             m_socket.close();
             return true; // TODO
         };
-        
+
         template <typename F1>
         void send(message<T>& msg, F1 cb)
         {
@@ -130,19 +130,19 @@ namespace asionet
             try
             {
                 Botan::secure_vector<uint8_t> iv(&msg.m_header.m_iv[0],
-                                                 &msg.m_header.m_iv[16]);
+                    &msg.m_header.m_iv[16]);
                 m_dec->start(iv);
                 m_dec->finish(msg.body());
             }
-            catch (Botan :: Decoding_Error & e)  
+            catch (Botan::Decoding_Error& e)
             {
-                std::cout << "Decoding error: " << e.what () 
-                          << " msg ["
-                          << Botan::hex_encode(msg.body()) 
-                          << "] unencrypted length: " << msg.m_header.m_size
-                          << " encrypted length: " << msg.body().size() 
-                          << "\n";  
-            }  
+                std::cout << "Decoding error: " << e.what()
+                    << " msg ["
+                    << Botan::hex_encode(msg.body())
+                    << "] unencrypted length: " << msg.m_header.m_size
+                    << " encrypted length: " << msg.body().size()
+                    << "\n";
+            }
         }
 
         void decrypt(uint8_t* data, size_t size)
@@ -153,7 +153,7 @@ namespace asionet
                 m_dec->start(KnownIv);
                 m_dec->finish(candidate);
             }
-            catch (Botan :: Decoding_Error & e)  
+            catch (Botan::Decoding_Error& e)
             {
                 // this is just an authentication failure (expected)
             }
@@ -164,6 +164,16 @@ namespace asionet
             Botan::secure_vector<uint8_t> candidate(data, &data[size]);
             m_enc->start(KnownIv);
             m_enc->finish(candidate);
+        }
+
+        void current_challenge(std::tuple<std::shared_ptr<uint8_t>, size_t> data)
+        {
+            m_cur_challenge = data;
+        }
+
+        std::tuple<std::shared_ptr<uint8_t>, size_t> current_challenge() const
+        {
+            return m_cur_challenge;
         }
 
     private:
@@ -231,16 +241,18 @@ namespace asionet
             wcb(std::enable_shared_from_this<session<T, Encrypt>>::shared_from_this(), ec);
         }
 
-        asio::ip::tcp::socket               m_socket;
-        msg_cb                              m_mcb;
-        err_cb                              m_ecb;
-        asionet::message_header<T>          m_data;
-        encrypt_type                        m_enc;
-        decrypt_type                        m_dec;
-        bool                                m_established{false};
-        std::condition_variable             m_cv;
-        std::mutex                          m_send_mutex;
-        bool                                m_send_pending{ false };
+        asio::ip::tcp::socket                           m_socket;
+        msg_cb                                          m_mcb;
+        err_cb                                          m_ecb;
+        asionet::message_header<T>                      m_data;
+        encrypt_type                                    m_enc;
+        decrypt_type                                    m_dec;
+        bool                                            m_established{false};
+        std::condition_variable                         m_cv;
+        std::mutex                                      m_send_mutex;
+        bool                                            m_send_pending{ false };
+        std::tuple<std::shared_ptr<uint8_t>, size_t>    m_cur_challenge;
+        //ol                                            m_valid{ false };
 
         int                                 m_outstanding_sends{ 0 };
     };
