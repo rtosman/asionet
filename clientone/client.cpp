@@ -44,11 +44,11 @@ struct client
     {
     }
 
-    bool connect(const char* server, uint16_t port)
+    bool connect(const char* server, uint16_t port, const std::chrono::seconds& tmout)
     {
         std::string s(server);
 
-        return m_intf->connect(s, port);
+        return m_intf->connect(s, port, tmout);
     }
 
     bool is_connected()
@@ -244,7 +244,7 @@ struct client
 
 private:
     asio::io_context                    m_context;
-    std::unique_ptr<interface_type>          m_intf;
+    std::unique_ptr<interface_type>     m_intf;
     enum {
         ConnectionRequested,
         ConnectionMade,
@@ -326,7 +326,7 @@ int main(int argc, char** argv)
     
     try
     {
-        c.connect(argv[1], atoi(argv[2]));
+        c.connect(argv[1], atoi(argv[2]), 10s);
 
         while (c.run());
     }
