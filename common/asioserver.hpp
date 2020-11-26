@@ -3,6 +3,7 @@
 #include "asionet.hpp"
 #include "asioqueue.hpp"
 #include "asiomsg.hpp"
+#include "asioutil.hpp"
 #include "asiosession.hpp"
 #include <list>
 #include <map>
@@ -46,6 +47,7 @@ namespace asionet
         }
 
         void handle_accept(std::shared_ptr<session<T, Encrypt>> existing,
+                           const std::chrono::seconds& tmout,
                            const asio::error_code ec)
         {
             if (!ec)
@@ -53,7 +55,7 @@ namespace asionet
                 if (m_connect_cb(existing))
                 {
                     peak_sessions();
-                    existing->start();
+                    authenticate(existing, tmout); 
                 }
                 else
                 {
@@ -90,6 +92,67 @@ namespace asionet
         asio::ip::tcp::socket                                               m_socket;
         asio::ip::tcp::acceptor                                             m_acceptor;
         stats                                                               m_stats;
+        std::tuple<std::shared_ptr<uint8_t>, size_t>                        m_cur_challenge;
+        bool                                                                m_valid{false};
+
+        std::tuple<std::shared_ptr<uint8_t>, size_t> init_challenge(uint8_t* space, size_t amount)
+        {
+            std::shared_ptr<uint8_t> copy(new uint8_t[amount]);
+
+            Botan::AutoSeeded_RNG rng;
+            Botan::secure_vector<uint8_t> random_data = rng.random_vec(amount);
+            std::memcpy(space, random_data.data(), random_data.size());
+            std::memcpy(copy.get(), space, random_data.size());
+            return std::make_tuple(copy, random_data.size());
+        }
+
+        unsigned char verify_response(std::shared_ptr<session<T, Encrypt>> s, 
+                                      uint8_t* resp, 
+                                      std::tuple<std::shared_ptr<uint8_t>, size_t>& answer)
+        {
+            s->decrypt(&resp[0],std::get<1>(answer));
+            return memcmp(&resp[0], std::get<0>(answer).get(), std::get<1>(answer));
+        }
+        
+        void authenticate(std::shared_ptr<session<T, Encrypt>> existing,
+                          const std::chrono::seconds& tmout)
+        {
+            if constexpr (Encrypt == true)
+            {
+                // message 0 is reserved for authentication
+                // the IV field in the header is used to supply
+                // the random data for the challenge
+                std::shared_ptr<message<T>> auth(new message<T>());
+                m_cur_challenge = init_challenge(&auth->m_header.m_iv[0], 
+                                                 sizeof(auth->m_header.m_iv)); 
+                existing->send(*auth,
+                    [&existing, &tmout, this]() -> void
+                    {
+                        message_header<T> resp;
+                        auto [read_err, timeout] = read_with_timeout(m_context,
+                                          existing->socket(),
+                                          asio::buffer(&resp,
+                                                       sizeof resp),
+                                          tmout
+                                         );
+                        if (!timeout && (read_err && !read_err.value()))
+                        {
+                            if (verify_response(existing, 
+                                                reinterpret_cast<uint8_t*>(&resp.m_iv),
+                                                m_cur_challenge) == 0)
+                            {
+                                m_valid = true;
+                                existing->start();
+                            }
+                        }
+                    }
+                );
+            }
+            else
+            {
+                existing->start();
+            }
+        }
 
         void remove_session(std::shared_ptr<session<T, Encrypt>> s)
         {
@@ -200,6 +263,7 @@ namespace asionet
                 std::bind(&server_interface::handle_accept,
                     this,
                     s,
+                    10s,
                     std::placeholders::_1
                 )
             );

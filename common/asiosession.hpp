@@ -10,8 +10,9 @@
 
 namespace asionet 
 {
-    const int AESBlockSize = 16;
-
+    const int     AESBlockSize = 16;
+    const Botan::secure_vector<uint8_t> KnownIv = {0,4,7,2,0xa,0xba,0xab,0x42,1,3,6,5,0xf,0xef,0xdb,0x23};
+                
     template <uint8_t BlockSize = AESBlockSize>
     uint32_t crypto_align(uint32_t size)
     {
@@ -76,15 +77,16 @@ namespace asionet
                             );                    
         }
 
-        void connect(const asio::ip::tcp::resolver::results_type& endpoints)
+        template <typename F1>
+        void connect(const asio::ip::tcp::resolver::results_type& endpoints, F1 cb)
         {
             // Request asio attempts to connect to an endpoint
             asio::async_connect(m_socket, endpoints,
-                [this](std::error_code ec, asio::ip::tcp::endpoint endpoint)
+                [cb](std::error_code ec, asio::ip::tcp::endpoint endpoint)
                 {
                     if (!ec)
                     {
-                        start();
+                        cb();
                     }
                 });
         };
@@ -140,8 +142,28 @@ namespace asionet
                           << "] unencrypted length: " << msg.m_header.m_size
                           << " encrypted length: " << msg.body().size() 
                           << "\n";  
-                exit(1);
             }  
+        }
+
+        void decrypt(uint8_t* data, size_t size)
+        {
+            Botan::secure_vector<uint8_t> candidate(data, &data[size]);
+            try
+            {
+                m_dec->start(KnownIv);
+                m_dec->finish(candidate);
+            }
+            catch (Botan :: Decoding_Error & e)  
+            {
+                // this is just an authentication failure (expected)
+            }
+        }
+
+        void encrypt(uint8_t* data, size_t size)
+        {
+            Botan::secure_vector<uint8_t> candidate(data, &data[size]);
+            m_enc->start(KnownIv);
+            m_enc->finish(candidate);
         }
 
     private:

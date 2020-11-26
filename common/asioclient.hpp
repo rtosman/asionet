@@ -3,6 +3,7 @@
 #include "asionet.hpp"
 #include "asioqueue.hpp"
 #include "asiomsg.hpp"
+#include "asioutil.hpp"
 #include "asiosession.hpp"
 #include "one.hpp"
 #include <map>
@@ -36,7 +37,8 @@ namespace asionet
         }
 
         [[nodiscard]] bool connect(const std::string& server, 
-                                   const uint16_t port)
+                                   const uint16_t port,
+                                   const std::chrono::seconds& tmout)
         {
             asio::error_code    ec;
 
@@ -53,7 +55,22 @@ namespace asionet
                                                 this)
                             );
 
-                m_session->connect(endpoints);
+                m_session->connect(endpoints, [&tmout, this]()
+                                              {
+                                                message<T> chlng;
+
+                                                read_with_timeout(m_context,
+                                                                  m_session->socket(), 
+                                                                  asio::buffer(&chlng.m_header, sizeof chlng.m_header),
+                                                                  tmout
+                                                                 );
+
+                                                m_session->encrypt(reinterpret_cast<uint8_t*>(&chlng.m_header.m_iv),
+                                                                   sizeof chlng.m_header.m_iv);     
+                                                m_session->send(chlng, []() {});
+                                                m_session->start();
+                                              }
+                                  );
 
                 m_thrctxt = std::thread([this]() { m_context.run(); });
             }
