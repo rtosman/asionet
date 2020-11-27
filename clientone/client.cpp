@@ -237,7 +237,7 @@ struct client
             break;
         }
 
-        for (auto i = 0; i < sizeof(m_key) / sizeof(m_key[Ping]); ++i) m_old_key[i] = m_key[i];
+        for (auto i = 0; i < m_key.size(); ++i) m_old_key[i] = m_key[i];
 
         return m_run;
     }
