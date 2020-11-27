@@ -105,7 +105,7 @@ private:
                                 {
                                     constexpr auto s1 = asio_make_encrypted_string("Fire Bullet (");
                                     constexpr auto s2 = asio_make_encrypted_string(") from: ");
-                                    constexpr auto s3 = asio_make_encrypted_string("Fired OK!");
+                                    constexpr auto fired = asio_make_encrypted_string("Fired!");
                                     float x{0}, y{0};
 
                                     m >> y >> x;
@@ -114,13 +114,13 @@ private:
                                         << std::string(s2) << s->socket().remote_endpoint() << "\n";
 
                                     auto& reply = m_replies.create_inplace(m.m_header);
-                                    reply << std::string(s3).c_str();
+                                    reply << std::string(fired).c_str();
                                     auto& replies = m_replies;
                                     m_intf->send(s, reply,
                                                 [&replies, &reply]() -> void
                                                 {
-                                                    constexpr auto s4 = asio_make_encrypted_string("FireBullet reply sent");
-                                                    std::cout << std::string(s4) << "\n";
+                                                    constexpr auto s3 = asio_make_encrypted_string("FireBullet reply sent");
+                                                    std::cout << std::string(s3) << "\n";
                                                     replies.slow_erase(reply);
                                                 }
                                     );
@@ -130,7 +130,7 @@ private:
                                 {
                                     constexpr auto s1 = asio_make_encrypted_string("Move Player (");
                                     constexpr auto s2 = asio_make_encrypted_string(") from: ");
-                                    constexpr auto s3 = asio_make_encrypted_string("Moved Player OK!");
+                                    constexpr auto moved = asio_make_encrypted_string("Moved Player!");
                                     double x{0}, y{0};
 
                                     m >> y >> x;
@@ -140,12 +140,12 @@ private:
 
                                     auto& reply = m_replies.create_inplace(m.m_header);
 
-                                    reply << std::string(s3).c_str();
+                                    reply << std::string(moved).c_str();
                                     auto& replies = m_replies;
                                     m_intf->send(s, reply,
                                                 [&replies, &reply]() -> void {
-                                                    constexpr auto s4 = asio_make_encrypted_string("MovePlayer reply sent");
-                                                    std::cout << std::string(s4) << "\n";
+                                                    constexpr auto s3 = asio_make_encrypted_string("MovePlayer reply sent");
+                                                    std::cout << std::string(s3) << "\n";
                                                     replies.slow_erase(reply);
                                                 }
                                     );
