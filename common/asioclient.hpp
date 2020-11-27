@@ -66,9 +66,9 @@ namespace asionet
                                               asio::buffer(&chlng.m_header, sizeof chlng.m_header),
                                               tmout
                             );
-
-                            m_session->encrypt(reinterpret_cast<uint8_t*>(&chlng.m_header.m_iv),
-                                sizeof chlng.m_header.m_iv);
+                            Botan::secure_vector<uint8_t> encrypted = m_session->encrypt(reinterpret_cast<uint8_t*>(&chlng.m_header.m_iv),
+                                                                                         sizeof chlng.m_header.m_iv);
+                            std::memcpy(&chlng.m_header.m_iv, encrypted.data()+4, sizeof(chlng.m_header.m_iv));
                             m_session->start();
                             m_session->send(chlng, []() {});
                         }
