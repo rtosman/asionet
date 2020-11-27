@@ -82,9 +82,8 @@ private:
         },
         { MsgTypes::Ping, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    std::stringstream ss;
-
                                     std::chrono::system_clock::time_point t;
+
                                     m >> t;
                                     // for ping, just send back the message as-is for
                                     // minimal latency
@@ -108,8 +107,7 @@ private:
                                         << x << ":" << y
                                         << ") from: " << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_empty_inplace();
-                                    reply.m_header.m_id = m.m_header.m_id;
+                                    auto& reply = m_replies.create_inplace(m.m_header);
                                     reply << "Fired OK!";
                                     auto& replies = m_replies;
                                     m_intf->send(s, reply,
@@ -130,8 +128,7 @@ private:
                                         << x << ":" << y
                                         << ") from: " << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_empty_inplace();
-                                    reply.m_header.m_id = m.m_header.m_id;
+                                    auto& reply = m_replies.create_inplace(m.m_header);
                                     reply << "Moved Player OK!";
                                     auto& replies = m_replies;
                                     m_intf->send(s, reply,
@@ -144,11 +141,10 @@ private:
         },
         { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    std::cout << "Statistics\n";
+                                    std::cout << "Request Statistics from " 
+                                              << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_empty_inplace();
-                                    reply.m_header.m_id = m.m_header.m_id;
-                                    reply.m_header.m_size = sizeof(asionet::stats);
+                                    auto& reply = m_replies.create_inplace(m.m_header);
                                     reply << m_intf->statistics();
                                     auto& replies = m_replies;
                                     m_intf->send(s, reply,
