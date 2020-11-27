@@ -2,7 +2,7 @@
 #define _ASIOMSG_HPP_INCLUDED
 #include "asionet.hpp"
 #include "asiobuiltin.hpp"
-#include <botan/auto_rng.h>
+#include "asionetcrypto.hpp"
 
 namespace asionet 
 {
@@ -11,7 +11,7 @@ namespace asionet
     {
         T           m_id{};
         uint32_t    m_size{ 0 };
-        uint8_t     m_iv[16]{};
+        uint8_t     m_iv[AESBlockSize]{};
     };
 
     template <typename T, typename BodyType = Botan::secure_vector<uint8_t>>
@@ -24,7 +24,7 @@ namespace asionet
         {
         }
 
-        message(message_header<T>& hdr)
+        message(const message_header<T>& hdr)
         {
             m_header = hdr;
             if (hdr.m_size == 0)
@@ -124,18 +124,16 @@ namespace asionet
         std::shared_ptr<session<T, Encrypt>>        m_remote;
         message<T>                                  m_msg;
         
-        owned_message(message_header<T>& hdr, std::shared_ptr<session<T, Encrypt>> remote):
+        owned_message(const message_header<T>& hdr, std::shared_ptr<session<T, Encrypt>> remote):
                             m_remote(remote),
                             m_msg(hdr)
         {
-//            std::cout << "owned_msg constructed with header\n";
         }
 
         owned_message(message<T>& msg, std::shared_ptr<session<T, Encrypt>> remote):
                             m_remote(remote),
                             m_msg(msg)
         {
-//            std::cout << "owned_msg constructed with msg\n";
         }
 
         owned_message(const owned_message<T, Encrypt>& other)
@@ -160,11 +158,6 @@ namespace asionet
 
         }
 
-        // ~owned_message()
-        // {
-        //     std::cout << "owned message destroyed: " << this << "\n";
-        // }
-
         owned_message<T, Encrypt>& operator=(const owned_message<T, Encrypt>& other)
         {
             if(this == &other) return *this;
@@ -172,12 +165,6 @@ namespace asionet
             this->m_remote = other.m_remote;
             this->m_msg = other.m_msg;
         }
-//        friend std::ostream& operator<<(std::ostream& os, const owned_message<T>& msg)
-//        {
-//            os << msg.msg;
-//            return os;
-//        }
     };
 }
-
 #endif

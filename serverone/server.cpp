@@ -26,7 +26,7 @@ struct server
 {
 #if 0 // no encryption asynchronous read
     using sess_type = std::shared_ptr<asionet::session<MsgTypes, false>>;
-    using interface_type = asionet::server_interface<MsgTypes, false, true>;
+    using interface_type = asionet::server_interface<MsgTypes, false>;
     using queue_type = asionet::protqueue<asionet::owned_message<MsgTypes, false>>;
 #else // encryption + async read 
     using sess_type = std::shared_ptr<asionet::session<MsgTypes>>;
@@ -66,6 +66,11 @@ struct server
         return true;
     }
 
+    bool stopped()
+    {
+        return m_context.stopped();
+    }
+
 private:
     asio::io_context                                m_context;
     asionet::protqueue<asionet::message<MsgTypes>>  m_replies;
@@ -91,8 +96,8 @@ private:
         auto& reply = r;
         auto& replies = q;
         reply.blank(); // Connected reply has no data
-        s->write(reply,
-                [&replies, &reply](sess_type s) -> void
+        s->send(reply,
+                [&replies, &reply]() -> void
                 {
                     replies.slow_erase(reply);
                 }
@@ -107,8 +112,8 @@ private:
         auto& reply = q.create_inplace(m);
         auto& replies = q;
         reply.blank(); // Connected reply has no data
-        s->write(reply,
-                [&replies, &reply](sess_type s) -> void
+        s->send(reply,
+                [&replies, &reply]() -> void
                 {
                     replies.slow_erase(reply);
                 }
@@ -127,8 +132,8 @@ private:
         auto& reply = q.create_empty_inplace();
         reply.m_header.m_id = m.m_header.m_id;
         auto& replies = q;
-        s->write(reply,
-                [&replies, &reply](sess_type s) -> void {
+        s->send(reply,
+                [&replies, &reply]() -> void {
                     replies.slow_erase(reply);
                 }
         );
@@ -151,8 +156,8 @@ private:
         // this should be a null string 
         reply << "Moved Player OK!";
         auto& replies = q;
-        s->write(reply,
-                [&replies, &reply](sess_type s) -> void {
+        s->send(reply,
+                [&replies, &reply]() -> void {
                     replies.slow_erase(reply);
                 }
         );
@@ -170,8 +175,8 @@ private:
                                     auto& reply = m_replies.create_inplace(m.m_header);
                                     auto& replies = m_replies;
                                     reply.blank(); // Connected reply has no data
-                                    s->write(reply, 
-                                            [&replies, &reply](sess_type s) -> void 
+                                    m_intf->send(s, reply, 
+                                            [&replies, &reply]() -> void
                                             {
                                                 replies.slow_erase(reply);
                                             }
@@ -180,22 +185,18 @@ private:
         },
         { MsgTypes::Ping, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    std::stringstream ss;
-
                                     std::chrono::system_clock::time_point t;
+
                                     m >> t;
                                     // for ping, just send back the message as-is for
-                                    // minimal latency, the ping is only a header 
-                                    // so encryption will not be applied
+                                    // minimal latency
                                     auto& reply = m_replies.create_inplace(m.m_header);
                                     reply << t;
-                                    // reply->m_header = m.m_header;
-                                    // reply->m_body = m.m_body;
                                     auto& replies = m_replies;
-                                    s->write(reply, 
-                                                [&replies, &reply](sess_type s) -> void 
+                                    m_intf->send(s, reply,
+                                                [&replies, &reply]() -> void
                                                 {
-                                                replies.slow_erase(reply);
+                                                    replies.slow_erase(reply);
                                                 }
                                     );
                                 }
@@ -209,12 +210,11 @@ private:
                                         << x << ":" << y
                                         << ") from: " << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_empty_inplace();
-                                    reply.m_header.m_id = m.m_header.m_id;
+                                    auto& reply = m_replies.create_inplace(m.m_header);
                                     reply << "Fired OK!";
                                     auto& replies = m_replies;
-                                    s->write(reply, 
-                                                [&replies, &reply](sess_type s) -> void 
+                                    m_intf->send(s, reply,
+                                                [&replies, &reply]() -> void
                                                 {
                                                 std::cout << "FireBullet reply sent\n";
                                                 replies.slow_erase(reply);
@@ -231,12 +231,11 @@ private:
                                         << x << ":" << y
                                         << ") from: " << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_empty_inplace();
-                                    reply.m_header.m_id = m.m_header.m_id;
+                                    auto& reply = m_replies.create_inplace(m.m_header);
                                     reply << "Moved Player OK!";
                                     auto& replies = m_replies;
-                                    s->write(reply, 
-                                                [&replies, &reply](sess_type s) -> void {
+                                    m_intf->send(s, reply,
+                                                [&replies, &reply]() -> void {
                                                 std::cout << "MovePlayer reply sent\n";
                                                 replies.slow_erase(reply);
                                                 }
@@ -245,15 +244,14 @@ private:
         },
         { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    std::cout << "Statistics\n";
+                                    std::cout << "Request Statistics from " 
+                                              << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_empty_inplace();
-                                    reply.m_header.m_id = m.m_header.m_id;
-                                    reply.m_header.m_size = sizeof(asionet::stats);
+                                    auto& reply = m_replies.create_inplace(m.m_header);
                                     reply << m_intf->statistics();
                                     auto& replies = m_replies;
-                                    s->write(reply, 
-                                                [&replies, &reply](sess_type s) -> void {
+                                    m_intf->send(s, reply,
+                                                [&replies, &reply]() -> void {
                                                 std::cout << "Statistics reply sent\n";
                                                 replies.slow_erase(reply);
                                                 }
@@ -576,8 +574,8 @@ private:
             r.m_header.m_id = m.m_header.m_id;
 
             r << flag;
-            s->write(r,
-                [&r](sess_type s) -> void {
+            s->send(r,
+                [&r]() -> void {
                 }
             );
         }
@@ -609,8 +607,8 @@ private:
             // put marker to repair flag here
             reply << flag;
             auto& replies = q;
-            s->write(reply,
-                [&replies, &reply](sess_type s) -> void {
+            s->send(reply,
+                [&replies, &reply]() -> void {
                     replies.slow_erase(reply);
                 }
             );
@@ -739,6 +737,7 @@ private:
 
     static uint32_t get_4()
     {
+        return 0;
     }
 
     static uint32_t get_5()
@@ -852,9 +851,12 @@ private:
 
     static uint32_t get_8()
     {
+        return 0;
     }
+
     static uint32_t get_9()
     {
+        return 0;
     }
 
     __declspec(noinline) static bool unlock_good(uint8_t a, 
@@ -924,7 +926,18 @@ int main(int argc, char** argv)
 {
     server game(atoi(argv[1]));
 
-    game.run();
+    try
+    {
+        game.run();
+    }
+    catch (std::exception& e)
+    {
+        std::stringstream s;
+        s << e.what();
+        s << ", io_context is " << (game.stopped() ? "stopped":"running") << "\n";
+
+        std::cout << "Error: " << s.str() << "\n";
+    }
 
     std::cout << argv[0] << " exiting...\n";
 
