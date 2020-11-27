@@ -2,6 +2,7 @@
 #include <asiomsg.hpp>
 #include <asioserver.hpp>
 #include <asioqueue.hpp>
+#include <asiostrenc.hpp>
 #include <map>
 #include <iomanip>
 #include "one.hpp"
@@ -63,12 +64,14 @@ private:
     std::map<MsgTypes, apifunc_type> m_apis = {
         { MsgTypes::Invalid, [](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    std::cerr << "Invalid message received\n";
+                                    constexpr auto s1 = asio_make_encrypted_string("Invalid message received");
+                                    std::cerr << std::string(s1) << "\n";
                                 }
         },
         { MsgTypes::Connected, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    std::cerr << "Client is connected\n";
+                                    constexpr auto s1 = asio_make_encrypted_string("Client is connected");
+                                    std::cerr << std::string(s1) << "\n";
                                     auto& reply = m_replies.create_inplace(m.m_header);
                                     auto& replies = m_replies;
                                     reply.blank(); // Connected reply has no data
@@ -100,48 +103,59 @@ private:
         },
         { MsgTypes::FireBullet, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
+                                    constexpr auto s1 = asio_make_encrypted_string("Fire Bullet (");
+                                    constexpr auto s2 = asio_make_encrypted_string(") from: ");
+                                    constexpr auto s3 = asio_make_encrypted_string("Fired OK!");
                                     float x{0}, y{0};
 
                                     m >> y >> x;
-                                    std::cout << "Fire Bullet ("
+                                    std::cout << std::string(s1)
                                         << x << ":" << y
-                                        << ") from: " << s->socket().remote_endpoint() << "\n";
+                                        << std::string(s2) << s->socket().remote_endpoint() << "\n";
 
                                     auto& reply = m_replies.create_inplace(m.m_header);
-                                    reply << "Fired OK!";
+                                    reply << std::string(s3).c_str();
                                     auto& replies = m_replies;
                                     m_intf->send(s, reply,
                                                 [&replies, &reply]() -> void
                                                 {
-                                                std::cout << "FireBullet reply sent\n";
-                                                replies.slow_erase(reply);
+                                                    constexpr auto s4 = asio_make_encrypted_string("FireBullet reply sent");
+                                                    std::cout << std::string(s4) << "\n";
+                                                    replies.slow_erase(reply);
                                                 }
                                     );
                                 }
         },
         { MsgTypes::MovePlayer, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
+                                    constexpr auto s1 = asio_make_encrypted_string("Move Player (");
+                                    constexpr auto s2 = asio_make_encrypted_string(") from: ");
+                                    constexpr auto s3 = asio_make_encrypted_string("Moved Player OK!");
                                     double x{0}, y{0};
 
                                     m >> y >> x;
-                                    std::cout << "Move Player ("
+                                    std::cout << std::string(s1)
                                         << x << ":" << y
-                                        << ") from: " << s->socket().remote_endpoint() << "\n";
+                                        << std::string(s2) << s->socket().remote_endpoint() << "\n";
 
                                     auto& reply = m_replies.create_inplace(m.m_header);
-                                    reply << "Moved Player OK!";
+
+                                    reply << std::string(s3).c_str();
                                     auto& replies = m_replies;
                                     m_intf->send(s, reply,
                                                 [&replies, &reply]() -> void {
-                                                std::cout << "MovePlayer reply sent\n";
-                                                replies.slow_erase(reply);
+                                                    constexpr auto s4 = asio_make_encrypted_string("MovePlayer reply sent");
+                                                    std::cout << std::string(s4) << "\n";
+                                                    replies.slow_erase(reply);
                                                 }
                                     );
                                 }
         },
         { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    std::cout << "Request Statistics from " 
+                                    constexpr auto s1 = asio_make_encrypted_string("Request Statistics from ");
+
+                                    std::cout << std::string(s1)
                                               << s->socket().remote_endpoint() << "\n";
 
                                     auto& reply = m_replies.create_inplace(m.m_header);
@@ -149,8 +163,9 @@ private:
                                     auto& replies = m_replies;
                                     m_intf->send(s, reply,
                                                 [&replies, &reply]() -> void {
-                                                std::cout << "Statistics reply sent\n";
-                                                replies.slow_erase(reply);
+                                                    constexpr auto s2 = asio_make_encrypted_string("Statistics reply sent");
+                                                    std::cout << std::string(s2) << "\n";
+                                                    replies.slow_erase(reply);
                                                 }
                                     );
                                 }
