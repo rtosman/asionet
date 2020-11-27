@@ -3,21 +3,15 @@
 #include "asionet.hpp"
 #include "asioqueue.hpp"
 #include "asiomsg.hpp"
-#include <botan/cipher_mode.h>
-#include <botan/hex.h>
+#include "asionetcrypto.hpp"
 #include <cstdint>
 #include <condition_variable>
 
 namespace asionet 
 {
-    const int     AESBlockSize = 16;
+
     const Botan::secure_vector<uint8_t> KnownIv = {0,4,7,2,0xa,0xba,0xab,0x42,1,3,6,5,0xf,0xef,0xdb,0x23};
                 
-    template <uint8_t BlockSize = AESBlockSize>
-    uint32_t crypto_align(uint32_t size)
-    {
-        return size + (BlockSize - (size % BlockSize));
-    }
 
     template <typename T, bool Encrypt>
     struct session : public std::enable_shared_from_this<session<T, Encrypt>>
@@ -252,7 +246,6 @@ namespace asionet
         std::mutex                                      m_send_mutex;
         bool                                            m_send_pending{ false };
         std::tuple<std::shared_ptr<uint8_t>, size_t>    m_cur_challenge;
-        //ol                                            m_valid{ false };
 
         int                                 m_outstanding_sends{ 0 };
     };
