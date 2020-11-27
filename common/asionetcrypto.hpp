@@ -6,11 +6,13 @@
 
 const int     AESBlockSize = 16;
 
+namespace asionet {
 template <uint8_t BlockSize = AESBlockSize>
 uint32_t crypto_align(uint32_t size)
 {
     if(size == 0) return 0;
     return size + (BlockSize - (size % BlockSize));
+}
 }
 
 #endif
