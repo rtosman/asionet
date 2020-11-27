@@ -69,8 +69,8 @@ namespace asionet
 
                             m_session->encrypt(reinterpret_cast<uint8_t*>(&chlng.m_header.m_iv),
                                 sizeof chlng.m_header.m_iv);
-                            m_session->send(chlng, []() {});
                             m_session->start();
+                            m_session->send(chlng, []() {});
                         }
                     );
                 }
@@ -140,27 +140,19 @@ namespace asionet
             } else
                 owned_msg.m_msg.body().resize(owned_msg.m_msg.m_header.m_size);
 
-            if (s->get_hdr().m_size)
-            {
-                // if(m_msgs.size() > 1)
-                //     std::cout << "enqueuing async read body\n";
-                asio::async_read(s->socket(),
-                                 asio::buffer(owned_msg.m_msg.body().data(),
-                                              owned_msg.m_msg.body().size()
-                                             ),
-                                 std::bind(&client_interface::handle_read,
-                                    this,
-                                    &owned_msg,
-                                    std::placeholders::_1,
-                                    std::placeholders::_2
-                                 )
-                                );
-            } 
-            else
-            {
-                m_msg_ready_cb(m_msgs[s.get()]);
-                s->start();
-            }
+            // if the body size is 0, then handle_read will be called "immediately" while still 
+            // preserving the I/O pump
+            asio::async_read(s->socket(),
+                                asio::buffer(owned_msg.m_msg.body().data(),
+                                            owned_msg.m_msg.body().size()
+                                            ),
+                                std::bind(&client_interface::handle_read,
+                                this,
+                                &owned_msg,
+                                std::placeholders::_1,
+                                std::placeholders::_2
+                                )
+                            );
         }
         
         void handle_read(owned_message<T, Encrypt>* owned_msg,
@@ -171,8 +163,11 @@ namespace asionet
             {
                 if constexpr (Encrypt == true)
                 {
-                    assert(bytes_transferred >= AESBlockSize);
-                    owned_msg->m_remote->decrypt(owned_msg->m_msg);
+                    if (bytes_transferred)
+                    {
+                        assert(bytes_transferred >= AESBlockSize);
+                        owned_msg->m_remote->decrypt(owned_msg->m_msg);
+                    }
                 }
 
                 std::shared_ptr<session<T, Encrypt>> s = owned_msg->m_remote;
