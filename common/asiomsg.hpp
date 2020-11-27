@@ -2,7 +2,7 @@
 #define _ASIOMSG_HPP_INCLUDED
 #include "asionet.hpp"
 #include "asiobuiltin.hpp"
-#include <botan/auto_rng.h>
+#include "asionetcrypto.hpp"
 
 namespace asionet 
 {
@@ -11,7 +11,7 @@ namespace asionet
     {
         T           m_id{};
         uint32_t    m_size{ 0 };
-        uint8_t     m_iv[16]{};
+        uint8_t     m_iv[AESBlockSize]{};
     };
 
     template <typename T, typename BodyType = Botan::secure_vector<uint8_t>>
