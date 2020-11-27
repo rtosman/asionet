@@ -143,7 +143,15 @@ namespace asionet
                             {
                                 existing->start();
                             }
+                            else 
+                            {
+                                m_disconnect_cb(existing);
+                            }
                         }
+                        else
+                        {
+                            m_disconnect_cb(existing);
+                        }                        
                     }
                 );
             }
