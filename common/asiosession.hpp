@@ -139,7 +139,7 @@ namespace asionet
             }
         }
 
-        void decrypt(uint8_t* data, size_t size)
+        Botan::secure_vector<uint8_t> decrypt(uint8_t* data, size_t size)
         {
             Botan::secure_vector<uint8_t> candidate(data, &data[size]);
             try
@@ -151,13 +151,15 @@ namespace asionet
             {
                 // this is just an authentication failure (expected)
             }
+            return candidate;
         }
 
-        void encrypt(uint8_t* data, size_t size)
+        Botan::secure_vector<uint8_t> encrypt(uint8_t* data, size_t size)
         {
             Botan::secure_vector<uint8_t> candidate(data, &data[size]);
             m_enc->start(KnownIv);
             m_enc->finish(candidate);
+            return candidate;
         }
 
         void current_challenge(std::tuple<std::shared_ptr<uint8_t>, size_t> data)
@@ -165,7 +167,7 @@ namespace asionet
             m_cur_challenge = data;
         }
 
-        std::tuple<std::shared_ptr<uint8_t>, size_t> current_challenge() const
+        const std::tuple<std::shared_ptr<uint8_t>, size_t>& current_challenge() const
         {
             return m_cur_challenge;
         }

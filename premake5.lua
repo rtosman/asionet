@@ -1,8 +1,11 @@
 -- premake5.lua
+localIncludePrefix = "E:/Users/Rennie Allen/source/opensource"
+localLibPrefix = localIncludePrefix -- for the author these are equivalent
+localAsioPrefix = "E:/Users/Rennie Allen/source/include/asio-1.18.0"
 workspace "ASIO"
    configurations { "Debug", "Release" }
    includedirs { 
-      "E:/Users/Rennie Allen/source/include/asio-1.18.0/include",
+      localAsioPrefix .. "/include",
       "%{prj.location}/common",
       "%{prj.location}/one",
    }
@@ -14,22 +17,23 @@ workspace "ASIO"
       toolset('clang')
       defines { "_WIN32_WINNT=0x0601" }
       platforms { "Win32", "Win64" }
+      buildoptions { "-Wno-undefined-internal", "-Wno-unused-private-field" }
 
    filter "platforms:Win32"
       includedirs {
-         "E:/Users/Rennie Allen/source/opensource/include/botan-2/x86"
+         localIncludePrefix .. "/include/botan-2/x86"
       }
       libdirs {
-         "E:/Users/Rennie Allen/source/opensource/lib/x86"
+         localLibPrefix .. "/lib/x86"
       }
       architecture "x32"
   
    filter "platforms:Win64"
       includedirs {
-         "E:/Users/Rennie Allen/source/opensource/include/botan-2/x64"
+         localIncludePrefix .. "/include/botan-2/x64"
       }
       libdirs {
-         "E:/Users/Rennie Allen/source/opensource/lib/x64",
+         localLibPrefix .. "/lib/x64"
       }
       architecture "x64"
 

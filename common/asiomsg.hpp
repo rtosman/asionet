@@ -98,6 +98,19 @@ namespace asionet
             return msg;
         }
 
+        friend message<T>& operator<<(message<T>& msg, const char* data)
+        {
+            size_t i = msg.m_body.size();
+ 
+            msg.m_body.resize(msg.m_body.size() + strlen(data)+1);
+
+            std::memcpy(msg.m_body.data() + i, data, strlen(data));
+
+            msg.m_header.m_size = msg.m_body.size();
+
+            return msg;
+        }
+
         template<typename DT>
         friend message<T>& operator>>(message<T>& msg, const DT& data)
         {

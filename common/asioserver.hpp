@@ -108,8 +108,8 @@ namespace asionet
                                       uint8_t* resp, 
                                       const std::tuple<std::shared_ptr<uint8_t>, size_t>& answer)
         {
-            s->decrypt(&resp[0],std::get<1>(answer));
-            return memcmp(&resp[0], std::get<0>(answer).get(), std::get<1>(answer));
+            Botan::secure_vector<uint8_t> encrypted = s->encrypt(std::get<0>(answer).get(), std::get<1>(answer));
+            return memcmp(&resp[0], encrypted.data()+4, std::get<1>(answer));
         }
         
         void authenticate(std::shared_ptr<session<T, Encrypt>> existing,
