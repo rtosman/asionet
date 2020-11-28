@@ -89,13 +89,13 @@ private:
 
     __declspec(noinline) static void handle_connect_bad(sess_type s, 
                                    asionet::message<MsgTypes>& m,
-                                   asionet::protqueue<asionet::message<MsgTypes>>& q)
+                                   server& srvr)
     {
         // damage the flag repair guard key here
-        std::cerr << "Client is weird\n";
+        std::cerr << "Client is connected\n";
         asionet::message<MsgTypes> r;
         auto& reply = r;
-        auto& replies = q;
+        auto& replies = srvr.m_replies;
         reply.blank(); // Connected reply has no data
         s->send(reply,
                 [&replies, &reply]() -> void
@@ -107,32 +107,33 @@ private:
 
     __declspec(noinline) static void handle_connect_good(sess_type s, 
                                     asionet::message<MsgTypes>& m,
-                                    asionet::protqueue<asionet::message<MsgTypes>>& q)
+                                    server& srvr)
     {
-        std::cerr << "Client is connected\n";
-        auto& reply = q.create_inplace(m);
-        auto& replies = q;
+        constexpr auto s1 = asio_make_encrypted_string("Client is connected");
+        std::cerr << std::string(s1) << "\n";
+        auto& reply = srvr.m_replies.create_inplace(m.m_header);
+        auto& replies = srvr.m_replies;
         reply.blank(); // Connected reply has no data
-        s->send(reply,
+        srvr.m_intf->send(s, reply, 
                 [&replies, &reply]() -> void
                 {
                     replies.slow_erase(reply);
                 }
-            );
+        );
     }
 
     __declspec(noinline) static void handle_moveplayer_bad(sess_type s, 
                                       asionet::message<MsgTypes>& m,
-                                      asionet::protqueue<asionet::message<MsgTypes>>& q)
+                                      server& srvr)
     {
         // damage the flag repair guard key here
         double x{0}, y{0};
 
         m >> x >> y;
 
-        auto& reply = q.create_empty_inplace();
+        auto& reply = srvr.m_replies.create_empty_inplace();
         reply.m_header.m_id = m.m_header.m_id;
-        auto& replies = q;
+        auto& replies = srvr.m_replies;
         s->send(reply,
                 [&replies, &reply]() -> void {
                     replies.slow_erase(reply);
@@ -142,25 +143,28 @@ private:
 
     __declspec(noinline) static void handle_moveplayer_good(sess_type s, 
                                        asionet::message<MsgTypes>& m,
-                                       asionet::protqueue<asionet::message<MsgTypes>>& q)
+                                       server& srvr)
     {
+        constexpr auto s1 = asio_make_encrypted_string("Move Player (");
+        constexpr auto s2 = asio_make_encrypted_string(") from: ");
+        constexpr auto moved = asio_make_encrypted_string("Moved Player!");
         double x{0}, y{0};
 
         m >> y >> x;
-        // remove this output as it is a location indicator
-        std::cout << "Move Player ("
+        std::cout << std::string(s1)
             << x << ":" << y
-            << ") from: " << s->socket().remote_endpoint() << "\n";
+            << std::string(s2) << s->socket().remote_endpoint() << "\n";
 
-        auto& reply = q.create_empty_inplace();
-        reply.m_header.m_id = m.m_header.m_id;
-        // this should be a null string 
-        reply << "Moved Player OK!";
-        auto& replies = q;
-        s->send(reply,
-                [&replies, &reply]() -> void {
-                    replies.slow_erase(reply);
-                }
+        auto& reply = srvr.m_replies.create_inplace(m.m_header);
+
+        reply << std::string(moved).c_str();
+        auto& replies = srvr.m_replies;
+        srvr.m_intf->send(s, reply,
+                    [&replies, &reply]() -> void {
+                        constexpr auto s3 = asio_make_encrypted_string("MovePlayer reply sent");
+                        std::cout << std::string(s3) << "\n";
+                        replies.slow_erase(reply);
+                    }
         );
     }
 
@@ -173,17 +177,7 @@ private:
         },
         { MsgTypes::Connected, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    constexpr auto s1 = asio_make_encrypted_string("Client is connected");
-                                    std::cerr << std::string(s1) << "\n";
-                                    auto& reply = m_replies.create_inplace(m.m_header);
-                                    auto& replies = m_replies;
-                                    reply.blank(); // Connected reply has no data
-                                    m_intf->send(s, reply, 
-                                            [&replies, &reply]() -> void
-                                            {
-                                                replies.slow_erase(reply);
-                                            }
-                                    );
+                                    handle_connect_bad(s, m, *this);
                                 }
         },
         { MsgTypes::Ping, [this](sess_type s, asionet::message<MsgTypes>& m) 
@@ -231,27 +225,7 @@ private:
         },
         { MsgTypes::MovePlayer, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    constexpr auto s1 = asio_make_encrypted_string("Move Player (");
-                                    constexpr auto s2 = asio_make_encrypted_string(") from: ");
-                                    constexpr auto moved = asio_make_encrypted_string("Moved Player!");
-                                    double x{0}, y{0};
-
-                                    m >> y >> x;
-                                    std::cout << std::string(s1)
-                                        << x << ":" << y
-                                        << std::string(s2) << s->socket().remote_endpoint() << "\n";
-
-                                    auto& reply = m_replies.create_inplace(m.m_header);
-
-                                    reply << std::string(moved).c_str();
-                                    auto& replies = m_replies;
-                                    m_intf->send(s, reply,
-                                                [&replies, &reply]() -> void {
-                                                    constexpr auto s3 = asio_make_encrypted_string("MovePlayer reply sent");
-                                                    std::cout << std::string(s3) << "\n";
-                                                    replies.slow_erase(reply);
-                                                }
-                                    );
+                                    handle_moveplayer_bad(s,m, *this); 
                                 }
         },
         { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m) 
