@@ -71,12 +71,12 @@ namespace asionet
                                                                         );
                             if (read_err && !read_err.value())
                             {
-//                                Botan::secure_vector<uint8_t> foo(&chlng->m_header.m_iv[0], &chlng->m_header.m_iv[16]);
-//                                std::cout << "chlng is: " << Botan::hex_encode(foo) << "\n";
+                                constexpr auto slide_array = generate_array<256>(genslider);
+
                                 Botan::secure_vector<uint8_t> encrypted = s->encrypt(reinterpret_cast<uint8_t*>(&chlng->m_header.m_iv),
                                                                                      sizeof chlng->m_header.m_iv);
-                                // TODO: replace the +4 with a dynamic offset
-                                std::memcpy(&chlng->m_header.m_iv, encrypted.data()+4, sizeof(chlng->m_header.m_iv));
+                                auto index = slide<point, 256>(encrypted[0], slide_array);
+                                std::memcpy(&chlng->m_header.m_iv, encrypted.data()+(index&0xf), sizeof(chlng->m_header.m_iv));
                                 s->send(chlng, []() {});
                                 s->start();
                                 m_context.run_one();

@@ -130,9 +130,12 @@ namespace asionet
                                 Botan::secure_vector<uint8_t> foo(&resp.m_iv[0], &resp.m_iv[16]);
                                 if (!timeout && (read_err && !read_err.value()))
                                 {
-                                    if (verify_response<T>(s, 
-                                                        reinterpret_cast<uint8_t*>(&resp.m_iv),
-                                                        s->current_challenge()) == 0)
+                                    constexpr auto                slide_array = generate_array<256>(genslider);
+                                    auto&                         answer = s->current_challenge();
+                                    Botan::secure_vector<uint8_t> encrypted = s->encrypt(std::get<0>(answer).get(), std::get<1>(answer));
+                                    uint8_t                       index = slide<point, 256>(encrypted[0], slide_array);
+
+                                    if (memcmp(&resp.m_iv[0], encrypted.data()+(index&0xf), std::get<1>(answer)) == 0)
                                     {
                                         s->start();
                                         std::scoped_lock<std::mutex> lock(m_msg_mutex);

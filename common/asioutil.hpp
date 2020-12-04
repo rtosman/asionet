@@ -113,13 +113,25 @@ std::tuple<std::shared_ptr<uint8_t>, size_t> init_challenge(uint8_t* space, size
     return std::make_tuple(copy, random_data.size());
 }
 
-template<typename T>
-unsigned char verify_response(std::shared_ptr<asionet::session<T, true>> s,
-    uint8_t* resp,
-    const std::tuple<std::shared_ptr<uint8_t>, size_t>& answer)
+// by Xeo, from https://stackoverflow.com/a/13294458/420683
+template<std::size_t... Is> struct seq{};
+template<std::size_t N, std::size_t... Is>
+struct gen_seq : gen_seq<N-1, N-1, Is...>{};
+template<std::size_t... Is>
+struct gen_seq<0, Is...> : seq<Is...>{};
+
+template<class Generator, std::size_t... Is>
+constexpr auto generate_array_helper(Generator g, seq<Is...>)
+-> std::array<decltype(g(std::size_t{}, sizeof...(Is))), sizeof...(Is)>
 {
-    Botan::secure_vector<uint8_t> encrypted = s->encrypt(std::get<0>(answer).get(), std::get<1>(answer));
-    return memcmp(&resp[0], encrypted.data() + 4, std::get<1>(answer));
+    return {{g(Is, sizeof...(Is))...}};
+}
+
+template<std::size_t tcount, class Generator>
+constexpr auto generate_array(Generator g)
+-> decltype( generate_array_helper(g, gen_seq<tcount>{}) )
+{
+    return generate_array_helper(g, gen_seq<tcount>{});
 }
 
 #endif
