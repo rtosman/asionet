@@ -118,6 +118,76 @@ struct client
         m_intf->send(m, [m]() -> void {});
     }
 
+    void game_loop()
+    {
+        if (m_key[Stat] && !m_old_key[Stat])
+        {
+            get_statistics();
+        }
+
+        if (m_key[Ping] && !m_old_key[Ping])
+        {
+            m_flood_ping = !m_flood_ping;
+            if (m_flood_ping)
+            {
+                constexpr auto s1 = asionet_make_encrypted_string("Flood ping [ON]");
+                std::cout << std::string(s1) << "\n";
+            }
+            else
+            {
+                constexpr auto s1 = asionet_make_encrypted_string("Flood ping [OFF]");
+                std::cout << std::string(s1) << "\n";
+            }
+        }
+
+        std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+        auto deltams = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(now - m_last_transition));
+
+        if (m_key[Fire] && !m_old_key[Fire])
+        {
+            m_auto_repeat[Fire] = false;
+            m_last_transition = std::chrono::system_clock::now();
+            fire_bullet(2.0f, 5.0f);
+        }
+        else if(!m_auto_repeat[Fire] && 
+                (m_key[Fire] && m_old_key[Fire]) && 
+                (deltams > 500ms))
+        {
+            m_auto_repeat[Fire] = true;
+        }
+        else if(m_auto_repeat[Fire] && !m_key[Fire] && !m_old_key[Fire])
+        {
+            m_last_transition = std::chrono::system_clock::now();                
+            m_auto_repeat[Fire] = false;
+        }
+        else if(m_key[Fire] && m_auto_repeat[Fire])
+        {
+            fire_bullet(2.0f, 5.0f);
+        }
+                
+        if (m_key[Move] && !m_old_key[Move])
+        {
+            m_auto_repeat[Move] = false;
+            m_last_transition = std::chrono::system_clock::now();
+            move_player(12.0f, 52.0f);
+        }
+        else if(!m_auto_repeat[Move] && 
+                (m_key[Move] && m_old_key[Move]) && 
+                (deltams > 500ms))
+        {
+            m_auto_repeat[Move] = true;
+        }
+        else if(m_auto_repeat[Move] && !m_key[Move] && !m_old_key[Move])
+        {
+            m_last_transition = std::chrono::system_clock::now();                
+            m_auto_repeat[Move] = false;
+        }
+        else if(m_key[Move] && m_auto_repeat[Move])
+        {
+            move_player(12.0f, 52.0f);
+        }
+    }
+
     bool run()
     {
         if (GetForegroundWindow() == GetConsoleWindow())
@@ -144,82 +214,20 @@ struct client
         switch (m_state)
         {
         case ConnectionRequested:
+            [[unlikely]]
             if (is_connected()) m_state = ConnectionMade;
             break;
         case ConnectionMade: // let the server know that I know that the server knows that I am connected 
+            [[unlikely]]
             acknowledge_connection();
             m_state = ConnectionWaiting;
             break;
         case ConnectionWaiting:
+            [[unlikely]]
             break;
         case ConnectionComplete:
-            if (m_key[Stat] && !m_old_key[Stat])
-            {
-                get_statistics();
-            }
-
-            if (m_key[Ping] && !m_old_key[Ping])
-            {
-                m_flood_ping = !m_flood_ping;
-                if (m_flood_ping)
-                {
-                    constexpr auto s1 = asionet_make_encrypted_string("Flood ping [ON]");
-                    std::cout << std::string(s1) << "\n";
-                }
-                else
-                {
-                    constexpr auto s1 = asionet_make_encrypted_string("Flood ping [OFF]");
-                    std::cout << std::string(s1) << "\n";
-                }
-            }
-
-            std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-            auto deltams = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(now - m_last_transition));
-
-            if (m_key[Fire] && !m_old_key[Fire])
-            {
-                m_auto_repeat[Fire] = false;
-                m_last_transition = std::chrono::system_clock::now();
-                fire_bullet(2.0f, 5.0f);
-            }
-            else if(!m_auto_repeat[Fire] && 
-                    (m_key[Fire] && m_old_key[Fire]) && 
-                    (deltams > 500ms))
-            {
-                m_auto_repeat[Fire] = true;
-            }
-            else if(m_auto_repeat[Fire] && !m_key[Fire] && !m_old_key[Fire])
-            {
-                m_last_transition = std::chrono::system_clock::now();                
-                m_auto_repeat[Fire] = false;
-            }
-            else if(m_key[Fire] && m_auto_repeat[Fire])
-            {
-                fire_bullet(2.0f, 5.0f);
-            }
-                    
-            if (m_key[Move] && !m_old_key[Move])
-            {
-                m_auto_repeat[Move] = false;
-                m_last_transition = std::chrono::system_clock::now();
-                move_player(12.0f, 52.0f);
-            }
-            else if(!m_auto_repeat[Move] && 
-                    (m_key[Move] && m_old_key[Move]) && 
-                    (deltams > 500ms))
-            {
-                m_auto_repeat[Move] = true;
-            }
-            else if(m_auto_repeat[Move] && !m_key[Move] && !m_old_key[Move])
-            {
-                m_last_transition = std::chrono::system_clock::now();                
-                m_auto_repeat[Move] = false;
-            }
-            else if(m_key[Move] && m_auto_repeat[Move])
-            {
-                move_player(12.0f, 52.0f);
-            }
-
+            [[likely]]
+            game_loop();
             break;
         }
 
