@@ -38,7 +38,8 @@ struct client
                                             },
                                             [](sess_type s)
                                             {
-                                                std::cout << "Connection dropped\n";
+                                                constexpr auto s1 = asionet_make_encrypted_string("Connection dropped!");
+                                                std::cout << std::string(s1) << "\n";
                                             }
                                          )
             )
@@ -130,7 +131,7 @@ struct client
 
         if ((m_key[Quit] && !m_old_key[Quit]))
         {
-            constexpr auto s1 = asio_make_encrypted_string("Quitting!");
+            constexpr auto s1 = asionet_make_encrypted_string("Quitting!");
             std::cout << std::string(s1) << "\n";
             return false;
         }
@@ -162,12 +163,12 @@ struct client
                 m_flood_ping = !m_flood_ping;
                 if (m_flood_ping)
                 {
-                    constexpr auto s1 = asio_make_encrypted_string("Flood ping [ON]");
+                    constexpr auto s1 = asionet_make_encrypted_string("Flood ping [ON]");
                     std::cout << std::string(s1) << "\n";
                 }
                 else
                 {
-                    constexpr auto s1 = asio_make_encrypted_string("Flood ping [OFF]");
+                    constexpr auto s1 = asionet_make_encrypted_string("Flood ping [OFF]");
                     std::cout << std::string(s1) << "\n";
                 }
             }
@@ -249,7 +250,7 @@ private:
     std::map<MsgTypes, apifunc_type> m_apis = {
     { MsgTypes::Invalid, [](sess_type s, asionet::message<MsgTypes>& m)
                             {                    
-                                constexpr auto s1 = asio_make_encrypted_string("Invalid message received");
+                                constexpr auto s1 = asionet_make_encrypted_string("Invalid message received");
 
                                 std::cerr << std::string(s1) << "\n";
                             }
@@ -257,7 +258,7 @@ private:
     { MsgTypes::Connected, [this](sess_type s, asionet::message<MsgTypes>& m)
                             {
                                 // The server knows that I know that the server knows that I'm connected
-                                constexpr auto s1 = asio_make_encrypted_string("Connected");
+                                constexpr auto s1 = asionet_make_encrypted_string("Connected");
                                 std::cout << std::string(s1) << "\n";
                                 m_state = ConnectionComplete;
                             }
@@ -272,9 +273,9 @@ private:
                                 m_ping_times.emplace_back(static_cast<uint32_t>(deltaus.count()));
                                 if (m_ping_times.size() >= 1000)
                                 {
-                                    constexpr auto s1 = asio_make_encrypted_string("Ping round trip average = ");
-                                    constexpr auto s2 = asio_make_encrypted_string("us (calculated over ");
-                                    constexpr auto s3 = asio_make_encrypted_string(" samples)");
+                                    constexpr auto s1 = asionet_make_encrypted_string("Ping round trip average = ");
+                                    constexpr auto s2 = asionet_make_encrypted_string("us (calculated over ");
+                                    constexpr auto s3 = asionet_make_encrypted_string(" samples)");
 
                                     std::cout << std::string(s1)
                                         << (std::accumulate(m_ping_times.begin(), m_ping_times.end(), 0) / m_ping_times.size())
@@ -287,28 +288,28 @@ private:
     },
     { MsgTypes::FireBullet, [](sess_type s, asionet::message<MsgTypes>& m)
                             {
-                                constexpr auto s1 = asio_make_encrypted_string("response id = ");
-                                constexpr auto s2 = asio_make_encrypted_string(" body is [");
-                                constexpr auto s3 = asio_make_encrypted_string("]");
+                                constexpr auto s1 = asionet_make_encrypted_string("response id = ");
+                                constexpr auto s2 = asionet_make_encrypted_string(" body is [");
+                                constexpr auto s3 = asionet_make_encrypted_string("]");
 
                                 std::cout << std::string(s1) << (uint32_t)m.m_header.m_id << std::string(s2) << (char*)m.m_body.data() << std::string(s3) << "\n";
                             }
     },
     { MsgTypes::MovePlayer, [](sess_type s, asionet::message<MsgTypes>& m)
                             {
-                                constexpr auto s1 = asio_make_encrypted_string("response id = ");
-                                constexpr auto s2 = asio_make_encrypted_string(" body is [");
-                                constexpr auto s3 = asio_make_encrypted_string("]");
+                                constexpr auto s1 = asionet_make_encrypted_string("response id = ");
+                                constexpr auto s2 = asionet_make_encrypted_string(" body is [");
+                                constexpr auto s3 = asionet_make_encrypted_string("]");
 
                                 std::cout << std::string(s1) << (uint32_t)m.m_header.m_id << std::string(s2) << (char*)m.m_body.data() << std::string(s3) << "\n";
                             }
     },
     { MsgTypes::Statistics, [](sess_type s, asionet::message<MsgTypes>& m)
                             {
-                                constexpr auto s1 = asio_make_encrypted_string("Peak sessions: ");
-                                constexpr auto s2 = asio_make_encrypted_string("Peak messages: ");
-                                constexpr auto s3 = asio_make_encrypted_string("Total rx good: ");
-                                constexpr auto s4 = asio_make_encrypted_string("Total rx bad : ");
+                                constexpr auto s1 = asionet_make_encrypted_string("Peak sessions: ");
+                                constexpr auto s2 = asionet_make_encrypted_string("Peak messages: ");
+                                constexpr auto s3 = asionet_make_encrypted_string("Total rx good: ");
+                                constexpr auto s4 = asionet_make_encrypted_string("Total rx bad : ");
                                 asionet::stats stat;
                                 
                                 m >> stat;

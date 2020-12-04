@@ -80,13 +80,13 @@ private:
     std::map<MsgTypes, apifunc_type> m_apis = {
         { MsgTypes::Invalid, [](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    constexpr auto s1 = asio_make_encrypted_string("Invalid message received");
+                                    constexpr auto s1 = asionet_make_encrypted_string("Invalid message received");
                                     std::cerr << std::string(s1) << "\n";
                                 }
         },
         { MsgTypes::Connected, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    constexpr auto s1 = asio_make_encrypted_string("Client is connected");
+                                    constexpr auto s1 = asionet_make_encrypted_string("Client is connected");
                                     std::cerr << std::string(s1) << "\n";
 
                                     auto r = std::make_shared<asionet::message<MsgTypes>>(m.m_header);
@@ -107,9 +107,9 @@ private:
         },
         { MsgTypes::FireBullet, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    constexpr auto s1 = asio_make_encrypted_string("Fire Bullet (");
-                                    constexpr auto s2 = asio_make_encrypted_string(") from: ");
-                                    constexpr auto fired = asio_make_encrypted_string("Fired!");
+                                    constexpr auto s1 = asionet_make_encrypted_string("Fire Bullet (");
+                                    constexpr auto s2 = asionet_make_encrypted_string(") from: ");
+                                    constexpr auto fired = asionet_make_encrypted_string("Fired!");
                                     float x{0}, y{0};
 
                                     m >> y >> x;
@@ -122,7 +122,7 @@ private:
                                     m_intf->send(s, r,
                                                 [r]() -> void
                                                 {
-                                                    constexpr auto s3 = asio_make_encrypted_string("FireBullet reply sent");
+                                                    constexpr auto s3 = asionet_make_encrypted_string("FireBullet reply sent");
                                                     std::cout << std::string(s3) << "\n";
                                                 }
                                     );
@@ -130,9 +130,9 @@ private:
         },
         { MsgTypes::MovePlayer, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    constexpr auto s1 = asio_make_encrypted_string("Move Player (");
-                                    constexpr auto s2 = asio_make_encrypted_string(") from: ");
-                                    constexpr auto moved = asio_make_encrypted_string("Moved Player!");
+                                    constexpr auto s1 = asionet_make_encrypted_string("Move Player (");
+                                    constexpr auto s2 = asionet_make_encrypted_string(") from: ");
+                                    constexpr auto moved = asionet_make_encrypted_string("Moved Player!");
                                     double x{0}, y{0};
 
                                     m >> y >> x;
@@ -144,7 +144,7 @@ private:
                                     *r << std::string(moved).c_str();
                                     m_intf->send(s, r,
                                                 [r]() -> void {
-                                                    constexpr auto s3 = asio_make_encrypted_string("MovePlayer reply sent");
+                                                    constexpr auto s3 = asionet_make_encrypted_string("MovePlayer reply sent");
                                                     std::cout << std::string(s3) << "\n";
                                                 }
                                     );
@@ -152,7 +152,7 @@ private:
         },
         { MsgTypes::Statistics, [this](sess_type s, asionet::message<MsgTypes>& m) 
                                 {
-                                    constexpr auto s1 = asio_make_encrypted_string("Request Statistics from ");
+                                    constexpr auto s1 = asionet_make_encrypted_string("Request Statistics from ");
 
                                     std::cout << std::string(s1)
                                               << s->socket().remote_endpoint() << "\n";
@@ -161,7 +161,7 @@ private:
                                     *r << m_intf->statistics();
                                     m_intf->send(s, r,
                                                 [r]() -> void {
-                                                    constexpr auto s2 = asio_make_encrypted_string("Statistics reply sent");
+                                                    constexpr auto s2 = asionet_make_encrypted_string("Statistics reply sent");
                                                     std::cout << std::string(s2) << "\n";
                                                 }
                                     );

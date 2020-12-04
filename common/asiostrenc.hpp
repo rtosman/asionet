@@ -93,5 +93,5 @@ namespace asionet
 
 // a macro will allow appropriate seeding
 #define ASIO_ENCSTR_RNGSEED uint64_t{asionet::fnv1(__FILE__ __DATE__ __TIME__) + __LINE__}
-#define asio_make_encrypted_string asionet::make_encrypted_string<ASIO_ENCSTR_RNGSEED>
+#define asionet_make_encrypted_string asionet::make_encrypted_string<ASIO_ENCSTR_RNGSEED>
 #endif
