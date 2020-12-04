@@ -25,7 +25,7 @@ namespace asionet
         client_interface(asio::io_context& ctxt,
                          F1 msg_ready_cb,
                          F2 disconnect_cb):
-            m_context(ctxt),
+            m_context(ctxt), m_read(ctxt), m_write(ctxt),
             m_msg_ready_cb(msg_ready_cb),
             m_disconnect_cb(disconnect_cb)
         {
@@ -47,39 +47,55 @@ namespace asionet
                 asio::ip::tcp::resolver resolver(m_context);
                 asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(server, std::to_string(port));
 
-                m_session = std::make_shared<session<T, Encrypt>>(m_context,
-                                    std::bind(&client_interface::read_body,
-                                            this,
-                                            std::placeholders::_1),
-                                    std::bind(&client_interface::disconnect,
-                                                this)
+                m_session = std::make_shared<session<T, Encrypt>>(m_context, m_read, m_write,
+                                                                  std::bind(&client_interface::read_body,
+                                                                            this,
+                                                                            std::placeholders::_1
+                                                                           ),
+                                                                  std::bind(&client_interface::disconnect,
+                                                                            this
+                                                                           )
                             );
 
                 if constexpr (Encrypt == true)
                 {
-                    m_session->connect(endpoints, [&tmout, this]()
+                    auto& s = m_session;
+                    //  copy of timeout -----v  (don't capture by ref)
+                    s->connect(endpoints, [tmout, &s, this]()
                         {
-                            message<T> chlng;
+                            std::shared_ptr<message<T>> chlng = std::make_shared<message<T>>();
 
-                            read_with_timeout(m_context,
-                                              m_session->socket(),
-                                              asio::buffer(&chlng.m_header, sizeof chlng.m_header),
-                                              tmout
-                            );
-                            Botan::secure_vector<uint8_t> encrypted = m_session->encrypt(reinterpret_cast<uint8_t*>(&chlng.m_header.m_iv),
-                                                                                         sizeof chlng.m_header.m_iv);
-                            std::memcpy(&chlng.m_header.m_iv, encrypted.data()+4, sizeof(chlng.m_header.m_iv));
-                            m_session->start();
-                            m_session->send(chlng, []() {});
+                            auto [read_err, timeout] = read_with_timeout(s->socket(), m_context, m_read,
+                                                                         asio::buffer(&chlng->m_header, sizeof(chlng->m_header)),
+                                                                         tmout
+                                                                        );
+                            if (read_err && !read_err.value())
+                            {
+//                                Botan::secure_vector<uint8_t> foo(&chlng->m_header.m_iv[0], &chlng->m_header.m_iv[16]);
+//                                std::cout << "chlng is: " << Botan::hex_encode(foo) << "\n";
+                                Botan::secure_vector<uint8_t> encrypted = s->encrypt(reinterpret_cast<uint8_t*>(&chlng->m_header.m_iv),
+                                                                                     sizeof chlng->m_header.m_iv);
+                                // TODO: replace the +4 with a dynamic offset
+                                std::memcpy(&chlng->m_header.m_iv, encrypted.data()+4, sizeof(chlng->m_header.m_iv));
+                                s->send(chlng, []() {});
+                                s->start();
+                                m_context.run_one();
+                            }
+                            else
+                            {
+                                s.reset();
+                            }
                         }
                     );
                 }
                 else
                 {
-                    m_session->connect(endpoints, [this]() { m_session->start(); });
+                    auto s = m_session;
+                    m_session->connect(endpoints, [s]() { s->start(); });
                 }
 
                 m_thrctxt = std::thread([this]() { m_context.run(); });
+
             }
             catch(std::exception& e)
             {
@@ -113,13 +129,15 @@ namespace asionet
         }
 
         template <typename F1>
-        void send(message<T>& msg, F1 cb)
+        void send(std::shared_ptr<message<T>> msg, F1 cb)
         {
             m_session->send(msg, [cb]() {cb();});
         }
 
     private:
         asio::io_context&                                                   m_context;
+        asio::io_context::strand                                            m_read;
+        asio::io_context::strand                                            m_write;
         msg_ready_notification_cb                                           m_msg_ready_cb;
         disconnect_notification_cb                                          m_disconnect_cb;
         std::thread                                                         m_thrctxt;
@@ -146,12 +164,14 @@ namespace asionet
                                 asio::buffer(owned_msg.m_msg.body().data(),
                                             owned_msg.m_msg.body().size()
                                             ),
-                                std::bind(&client_interface::handle_read,
-                                this,
-                                &owned_msg,
-                                std::placeholders::_1,
-                                std::placeholders::_2
-                                )
+                                asio::bind_executor(m_read,
+                                                    std::bind(&client_interface::handle_read,
+                                                                this,
+                                                                &owned_msg,
+                                                                std::placeholders::_1,
+                                                                std::placeholders::_2
+                                                             )
+                                                   )
                             );
         }
         

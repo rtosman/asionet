@@ -46,7 +46,24 @@ struct server
 
     bool run()
     {
-        m_context.run();
+        std::vector<std::thread> threads;
+        auto count = std::thread::hardware_concurrency();
+
+        for(int n = 0; n < count; ++n)
+        {
+            threads.emplace_back([&]
+            {
+                m_context.run();
+            });
+        }
+
+        for(auto& thread : threads)
+        {
+            if(thread.joinable())
+            {
+                thread.join();
+            }
+        }
 
         return true;
     }
@@ -58,7 +75,6 @@ struct server
 
 private:
     asio::io_context                                m_context;
-    asionet::protqueue<asionet::message<MsgTypes>>  m_replies;
     std::unique_ptr<interface_type>                 m_intf;
  
     std::map<MsgTypes, apifunc_type> m_apis = {
@@ -72,15 +88,10 @@ private:
                                 {
                                     constexpr auto s1 = asio_make_encrypted_string("Client is connected");
                                     std::cerr << std::string(s1) << "\n";
-                                    auto& reply = m_replies.create_inplace(m.m_header);
-                                    auto& replies = m_replies;
-                                    reply.blank(); // Connected reply has no data
-                                    m_intf->send(s, reply, 
-                                            [&replies, &reply]() -> void
-                                            {
-                                                replies.slow_erase(reply);
-                                            }
-                                        );
+
+                                    auto r = std::make_shared<asionet::message<MsgTypes>>(m.m_header);
+                                    r->blank();
+                                    m_intf->send(s, r, [r]() -> void {});
                                 }
         },
         { MsgTypes::Ping, [this](sess_type s, asionet::message<MsgTypes>& m) 
@@ -88,17 +99,10 @@ private:
                                     std::chrono::system_clock::time_point t;
 
                                     m >> t;
-                                    // for ping, just send back the message as-is for
-                                    // minimal latency
-                                    auto& reply = m_replies.create_inplace(m.m_header);
-                                    reply << t;
-                                    auto& replies = m_replies;
-                                    m_intf->send(s, reply,
-                                                [&replies, &reply]() -> void
-                                                {
-                                                    replies.slow_erase(reply);
-                                                }
-                                    );
+
+                                    auto r = std::make_shared<asionet::message<MsgTypes>>(m.m_header);
+                                    *r << t;
+                                    m_intf->send(s, r, [r]() -> void {});
                                 }
         },
         { MsgTypes::FireBullet, [this](sess_type s, asionet::message<MsgTypes>& m) 
@@ -113,15 +117,13 @@ private:
                                         << x << ":" << y
                                         << std::string(s2) << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_inplace(m.m_header);
-                                    reply << std::string(fired).c_str();
-                                    auto& replies = m_replies;
-                                    m_intf->send(s, reply,
-                                                [&replies, &reply]() -> void
+                                    auto r = std::make_shared<asionet::message<MsgTypes>>(m.m_header);
+                                    *r << std::string(fired).c_str();
+                                    m_intf->send(s, r,
+                                                [r]() -> void
                                                 {
                                                     constexpr auto s3 = asio_make_encrypted_string("FireBullet reply sent");
                                                     std::cout << std::string(s3) << "\n";
-                                                    replies.slow_erase(reply);
                                                 }
                                     );
                                 }
@@ -138,15 +140,12 @@ private:
                                         << x << ":" << y
                                         << std::string(s2) << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_inplace(m.m_header);
-
-                                    reply << std::string(moved).c_str();
-                                    auto& replies = m_replies;
-                                    m_intf->send(s, reply,
-                                                [&replies, &reply]() -> void {
+                                    auto r = std::make_shared<asionet::message<MsgTypes>>(m.m_header);
+                                    *r << std::string(moved).c_str();
+                                    m_intf->send(s, r,
+                                                [r]() -> void {
                                                     constexpr auto s3 = asio_make_encrypted_string("MovePlayer reply sent");
                                                     std::cout << std::string(s3) << "\n";
-                                                    replies.slow_erase(reply);
                                                 }
                                     );
                                 }
@@ -158,14 +157,12 @@ private:
                                     std::cout << std::string(s1)
                                               << s->socket().remote_endpoint() << "\n";
 
-                                    auto& reply = m_replies.create_inplace(m.m_header);
-                                    reply << m_intf->statistics();
-                                    auto& replies = m_replies;
-                                    m_intf->send(s, reply,
-                                                [&replies, &reply]() -> void {
+                                    auto r = std::make_shared<asionet::message<MsgTypes>>(m.m_header);
+                                    *r << m_intf->statistics();
+                                    m_intf->send(s, r,
+                                                [r]() -> void {
                                                     constexpr auto s2 = asio_make_encrypted_string("Statistics reply sent");
                                                     std::cout << std::string(s2) << "\n";
-                                                    replies.slow_erase(reply);
                                                 }
                                     );
                                 }
@@ -188,6 +185,10 @@ int main(int argc, char** argv)
         s << ", io_context is " << (game.stopped() ? "stopped":"running") << "\n";
 
         std::cout << "Error: " << s.str() << "\n";
+    }
+    catch(...)
+    {
+        std::cout << "Unhandled exception\n";
     }
 
     std::cout << argv[0] << " exiting...\n";

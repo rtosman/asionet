@@ -57,18 +57,18 @@ struct client
         return m_intf->is_connected();
     }
 
+    bool in_flood_ping()
+    {
+        return m_flood_ping;
+    }
+
     void acknowledge_connection()
     {
-        auto& msg = m_outgoing.create_empty_inplace();
+        auto m = std::make_shared<asionet::message<MsgTypes>>();
 
-        msg.m_header.m_id = MsgTypes::Connected;
+        m->m_header.m_id = MsgTypes::Connected;
 
-        auto& replies = m_outgoing;
-
-        m_intf->send(msg, [&replies, &msg]()
-            {
-                replies.slow_erase(msg);
-            });
+        m_intf->send(m, [m]() -> void {});
     }
 
     void ping(std::chrono::system_clock::time_point t)
@@ -77,63 +77,44 @@ struct client
 
         if (m_ping_inflight) return;
 
-        auto& msg = m_outgoing.create_empty_inplace();
+        auto m = std::make_shared<asionet::message<MsgTypes>>();
 
-        msg.m_header.m_id = MsgTypes::Ping;
-        msg << t;
+        m->m_header.m_id = MsgTypes::Ping;
+        *m << t;
 
-        auto& replies = m_outgoing;
-        m_intf->send(msg, [&replies, &msg]()
-            {
-                replies.slow_erase(msg);
-            });
+        m_intf->send(m, [m]() -> void {});
 
         m_ping_inflight = true;
     }
 
     void fire_bullet(float x, float y)
     {
-        auto& msg = m_outgoing.create_empty_inplace();
+        auto m = std::make_shared<asionet::message<MsgTypes>>();
 
-        msg.m_header.m_id = MsgTypes::FireBullet;
-        msg << x << y;
+        m->m_header.m_id = MsgTypes::FireBullet;
+        *m << x << y;
 
-        auto& replies = m_outgoing;
-        m_intf->send(msg, [&replies, &msg]()
-            {
-                replies.slow_erase(msg);
-            });
+        m_intf->send(m, [m]() -> void {});
+
     }
 
     void move_player(double x, double y)
     {
-        auto& msg = m_outgoing.create_empty_inplace();
+        auto m = std::make_shared<asionet::message<MsgTypes>>();
 
-        msg.m_header.m_id = MsgTypes::MovePlayer;
-        msg << x << y;
+        m->m_header.m_id = MsgTypes::MovePlayer;
+        *m << x << y;
 
-        auto& replies = m_outgoing;
-
-        m_intf->send(msg, [&replies, &msg]()
-                        {
-                            replies.slow_erase(msg);
-                        }
-                    );
+        m_intf->send(m, [m]() -> void {});
     }
 
     void get_statistics()
     {
-        auto& msg = m_outgoing.create_empty_inplace();
+        auto m = std::make_shared<asionet::message<MsgTypes>>();
 
-        msg.m_header.m_id = MsgTypes::Statistics;
+        m->m_header.m_id = MsgTypes::Statistics;
 
-        auto& replies = m_outgoing;
-
-        m_intf->send(msg, [&replies, &msg]()
-                        {
-                            replies.slow_erase(msg);
-                        }
-                    );
+        m_intf->send(m, [m]() -> void {});
     }
 
     bool run()
@@ -151,7 +132,7 @@ struct client
         {
             constexpr auto s1 = asio_make_encrypted_string("Quitting!");
             std::cout << std::string(s1) << "\n";
-            m_run = false;
+            return false;
         }
 
         if (m_flood_ping)
@@ -247,8 +228,8 @@ struct client
     }
 
 private:
-    asio::io_context                    m_context;
-    std::unique_ptr<interface_type>     m_intf;
+    asio::io_context                                m_context;
+    std::unique_ptr<interface_type>                 m_intf;
     enum {
         ConnectionRequested,
         ConnectionMade,
@@ -260,7 +241,6 @@ private:
     std::array<bool, 5>                             m_key{};
     std::array<bool, 5>                             m_old_key{};
     bool                                            m_run{ true };
-    asionet::protqueue<asionet::message<MsgTypes>>  m_outgoing;
     std::chrono::system_clock::time_point           m_last_transition;
     std::array<bool, 5>                             m_auto_repeat{};
     bool                                            m_ping_inflight{ false };
@@ -351,12 +331,20 @@ int main(int argc, char** argv)
     {
         c.connect(argv[1], atoi(argv[2]), 10s);
 
-        while (c.run());
+        while (c.run()) 
+        {
+            if(!c.in_flood_ping())
+            {
+                std::this_thread::sleep_for(10ms);
+            }
+        };
     }
     catch (std::exception& e)
     {
         std::cout << "Error: " << e.what() << "\n";
     }
+
+    std::terminate();
 
     return 0;
 }
