@@ -108,6 +108,7 @@ namespace asionet
             auto& send_pending = m_send_pending;
             if (m_cv.wait_for(lock, 100ms, [&send_pending] { return !send_pending; }))
             {
+                [[likely]]
                 m_send_pending = true;
                 lock.unlock();
                 auto& send_mutex = m_send_mutex;
@@ -125,6 +126,7 @@ namespace asionet
             }
             else
             {
+                [[unlikely]]
                 throw std::exception("(I/O) wait timed out on send");
             }
         }
@@ -217,10 +219,12 @@ namespace asionet
         {
             if (!ec)
             {
+                [[likely]]
                 m_mcb(enable_shared::shared_from_this());
             }
             else
             {
+                [[unlikely]]
                 m_ecb(enable_shared::shared_from_this());
             }
         }
@@ -230,6 +234,7 @@ namespace asionet
         {  
             if (len) // write the body
             {
+                [[likely]]
                 asio::async_write(m_socket,
                                   asio::buffer(data, len),
                                   asio::bind_executor(m_write,
@@ -243,6 +248,7 @@ namespace asionet
             }
             else // header only message, we're done
             {
+                [[unlikely]]
                 cb(enable_shared::shared_from_this(), ec);
             }
         }

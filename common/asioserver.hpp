@@ -172,12 +172,15 @@ namespace asionet
         {
             if (!ec)
             {
+                [[likely]]
                 if (m_connect_cb(s))
                 {
+                    [[likely]]
                     authenticate(s, tmout); 
                 }
                 else
                 {
+                    [[unlikely]]
                     s->socket().close();
                     remove_session(s);
                 }
@@ -187,6 +190,7 @@ namespace asionet
             }
             else
             {
+                [[unlikely]]
                 s->socket().close();
                 remove_session(s);
             }
@@ -242,6 +246,7 @@ namespace asionet
 
             if (!ec)
             {
+                [[likely]]
                 if constexpr (Encrypt == true)
                 {
                     if (bytes_transferred)
@@ -257,6 +262,7 @@ namespace asionet
             }
             else
             {
+                [[unlikely]]
                 ++m_stats.count_.msgs_rx_bad_;
                 disconnect(owned_msg->m_remote);
             }            
