@@ -17,7 +17,7 @@ workspace "ASIO"
       toolset('clang')
       defines { "_WIN32_WINNT=0x0601" }
       platforms { "Win32", "Win64" }
-      buildoptions { "-Wno-undefined-internal", "-Wno-unused-private-field" }
+      buildoptions { "-Wno-undefined-internal", "-Wno-unused-private-field", "-Wno-unknown-attributes" }
 
    filter "platforms:Win32"
       includedirs {
