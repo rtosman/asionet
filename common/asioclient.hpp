@@ -75,7 +75,7 @@ namespace asionet
 
                                 Botan::secure_vector<uint8_t> encrypted = s->encrypt(reinterpret_cast<uint8_t*>(&chlng->m_header.m_iv),
                                                                                      sizeof chlng->m_header.m_iv);
-                                auto index = slide<point, 256>(encrypted[0], slide_array);
+                                auto index = slide<onetx, 256>(encrypted[0], slide_array);
                                 std::memcpy(&chlng->m_header.m_iv, encrypted.data()+(index&0xf), sizeof(chlng->m_header.m_iv));
                                 s->send(chlng, []() {});
                                 s->start();
