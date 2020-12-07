@@ -2,6 +2,10 @@
 #define _ONE_HPP_INCLUDED
 #include <cstdint>
 
+// User specific MsgTypes.  The first enum (0) has to be "Invalid"
+// and the last must be NumEnumELements. Enum value 0 is used for
+// internal messages and cannot be used, all user messages must be
+// 1 or higher
 enum class MsgTypes: uint32_t
 {
     Invalid,
@@ -24,23 +28,20 @@ MsgTypes clamp_msg_types(MsgTypes id)
 }
 
 // following is the support for the authentication challenge
-struct point
+struct onetx
 {
     uint8_t x;
     uint8_t y;
 };
 
-std::ostream& operator<<(std::ostream& o, point const& p)
+std::ostream& operator<<(std::ostream& o, onetx const& p)
 {  
     return o << (int)p.x << ", " << (int)p.y;  
 }
 
-constexpr point genslider(std::size_t curr, std::size_t total)
+constexpr onetx genslider(std::size_t curr, std::size_t total)
 {
-    uint8_t cur = curr;
-    uint8_t tot = total;
-
-    return {(uint8_t)(cur*4/(tot-1)), (uint8_t)(cur*2/(tot-1))};
+    return {(uint8_t)(curr*13/(total-1)), (uint8_t)(curr*19/total)};
 }
 
 template<typename T, int N>
@@ -48,7 +49,7 @@ uint8_t slide(uint8_t in, std::array<T,N> arr)
 {
     for (auto p: arr)
     {
-        if (p.x == in)
+        if (p.x == (in&0xf))
         {
             return p.y;
         }
