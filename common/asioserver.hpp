@@ -60,8 +60,8 @@ namespace asionet
                          F2 msg_ready_cb,
                          F3 disconnect_cb,
                          std::vector<uint8_t> key = Botan::hex_decode("2B7E151628AED2A6ABF7158809CF4F3C")):
+                                m_num_cores(std::thread::hardware_concurrency()),
                                 m_context(ctxt),
-                                m_read(ctxt), m_write(ctxt),
                                 m_port(port),
                                 m_connect_cb(connect_cb),
                                 m_msg_ready_cb(msg_ready_cb),
@@ -69,6 +69,21 @@ namespace asionet
                                 m_socket(m_context),
                                 m_acceptor(m_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), m_port))
         {
+            m_rd_strands.reserve(m_num_cores/2);
+            m_wr_strands.reserve(m_num_cores/2);
+
+            for(int i=0; i < m_num_cores;++i)
+            {
+                if(i%2 == 0)
+                {
+                    m_rd_strands.push_back(std::make_shared<asio::io_context::strand>(m_context));
+                }
+                else
+                {
+                    m_wr_strands.push_back(std::make_shared<asio::io_context::strand>(m_context));
+                }
+            }
+
             // prime the pump
             prime();
         }
@@ -88,10 +103,35 @@ namespace asionet
             s->send(msg, [cb]() {cb();});
         }
 
+
+        void run()
+        {
+            std::vector<std::thread> threads;
+
+            for(int n = 0; n < m_num_cores; ++n)
+            {
+                threads.emplace_back([&]
+                {
+                    m_context.run();
+                });
+            }
+
+            for(auto& thread : threads)
+            {
+                if(thread.joinable())
+                {
+                    thread.join();
+                }
+            }
+        }
+
     private:
+        int                                                                 m_num_cores;
         asio::io_context&                                                   m_context;
-        asio::io_context::strand                                            m_read;
-        asio::io_context::strand                                            m_write; 
+        std::vector<std::shared_ptr<asio::io_context::strand>>              m_rd_strands;
+        std::vector<std::shared_ptr<asio::io_context::strand>>              m_wr_strands;
+        int                                                                 m_rd_sel;
+        int                                                                 m_wr_sel;
         uint16_t                                                            m_port;
         new_connection_notification_cb                                      m_connect_cb;
         msg_ready_notification_cb                                           m_msg_ready_cb;
@@ -102,6 +142,20 @@ namespace asionet
         std::list<std::shared_ptr<session<T, Encrypt>>>                     m_sessions;
         std::mutex                                                          m_msg_mutex;
         stats                                                               m_stats{{0,0},{0,0}};
+
+        std::shared_ptr<asio::io_context::strand> select_read_strand()
+        {
+            auto& rc = m_rd_strands[m_rd_sel];
+            m_rd_sel = (m_rd_sel+1)%(m_num_cores/2);
+            return rc;
+        }
+
+        std::shared_ptr<asio::io_context::strand> select_write_strand()
+        {
+            auto& rc = m_wr_strands[m_wr_sel];
+            m_wr_sel = (m_wr_sel+1)%(m_num_cores/2);
+            return rc;
+        }
 
         void authenticate(std::shared_ptr<session<T, Encrypt>> s,
                           const std::chrono::seconds& tmout)
@@ -225,7 +279,7 @@ namespace asionet
             asio::async_read(s->socket(),
                                 asio::buffer(owned_msg.m_msg.body().data(),
                                             owned_msg.m_msg.body().size()),
-                                asio::bind_executor(m_read, 
+                                asio::bind_executor(s->rd_strand(), 
                                                     std::bind(&server_interface::handle_read,
                                                                 this,
                                                                 &owned_msg,
@@ -240,7 +294,7 @@ namespace asionet
                          const asio::error_code& ec,
                          size_t bytes_transferred)
         {
-            std::scoped_lock<std::mutex> lock(m_msg_mutex);
+//            std::scoped_lock<std::mutex> lock(m_msg_mutex);
             peak_messages<T,Encrypt>(m_stats, m_msgs);
             ++m_stats.count_.msgs_rx_good_;
 
@@ -277,10 +331,13 @@ namespace asionet
 
         void prime()
         {
-            std::shared_ptr<asionet::session<T, Encrypt>> s = 
+            auto rs = select_read_strand();
+            auto ws = select_write_strand();
+
+            std::shared_ptr<asionet::session<T, Encrypt>> s =
                       std::make_shared<session<T, Encrypt>>(m_context, 
-                                                            m_read, 
-                                                            m_write,
+                                                            *(rs.get()), 
+                                                            *(ws.get()),
                                                             std::bind(&server_interface::read_body,
                                                                     this,
                                                                     std::placeholders::_1),
@@ -290,7 +347,7 @@ namespace asionet
                                                             );
 
             m_acceptor.async_accept(s->socket(), 
-                asio::bind_executor(m_read, std::bind(&server_interface::handle_accept,
+                asio::bind_executor(*(rs.get()), std::bind(&server_interface::handle_accept,
                                                         this,
                                                         s,
                                                         10s,

@@ -44,28 +44,9 @@ struct server
     {
     }
 
-    bool run()
+    void run()
     {
-        std::vector<std::thread> threads;
-        auto count = std::thread::hardware_concurrency();
-
-        for(int n = 0; n < count; ++n)
-        {
-            threads.emplace_back([&]
-            {
-                m_context.run();
-            });
-        }
-
-        for(auto& thread : threads)
-        {
-            if(thread.joinable())
-            {
-                thread.join();
-            }
-        }
-
-        return true;
+        m_intf->run();
     }
 
     bool stopped()
@@ -73,9 +54,14 @@ struct server
         return m_context.stopped();
     }
 
+    ~server()
+    {
+    }
 private:
-    asio::io_context                                m_context;
-    std::unique_ptr<interface_type>                 m_intf;
+    asio::io_context                                        m_context;
+    std::vector<std::unique_ptr<asio::io_context::strand>>  m_rd_strands;
+    std::vector<std::unique_ptr<asio::io_context::strand>>  m_wr_strands;
+    std::unique_ptr<interface_type>                         m_intf;
  
     std::map<MsgTypes, apifunc_type> m_apis = {
         { MsgTypes::Invalid, [](sess_type s, asionet::message<MsgTypes>& m) 

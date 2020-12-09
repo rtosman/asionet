@@ -184,6 +184,16 @@ namespace asionet
             return m_cur_challenge;
         }
 
+        asio::io_context::strand& rd_strand()
+        {
+            return m_read;
+        }
+
+        asio::io_context::strand& wr_strand()
+        {
+            return m_write;
+        }
+
     private:
 
         void write(std::shared_ptr<message<T>> msg, wr_cb cb)
