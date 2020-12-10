@@ -279,7 +279,7 @@ private:
                                 m >> t;
                                 auto deltaus = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<double>(now - t));
                                 m_ping_times.emplace_back(static_cast<uint32_t>(deltaus.count()));
-                                if (m_ping_times.size() >= 1000)
+                                if (m_ping_times.size() >= 100)
                                 {
                                     constexpr auto s1 = asionet_make_encrypted_string("Ping round trip average = ");
                                     constexpr auto s2 = asionet_make_encrypted_string("us (calculated over ");
