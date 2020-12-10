@@ -61,6 +61,9 @@ namespace asionet
 
         void start()
         {
+            asio::ip::tcp::no_delay option(true);
+            m_socket.set_option(option);
+            
             m_established = true;
             asio::async_read(m_socket,
                 asio::buffer(&m_data, sizeof m_data),
@@ -79,10 +82,12 @@ namespace asionet
         {
             // Request asio attempts to connect to an endpoint
             asio::async_connect(m_socket, endpoints,
-                                [cb](std::error_code ec, asio::ip::tcp::endpoint endpoint)
+                                [this, cb](std::error_code ec, asio::ip::tcp::endpoint endpoint)
                                 {
                                     if (!ec)
                                     {
+                                        asio::ip::tcp::no_delay option(true);
+                                        m_socket.set_option(option);
                                         cb();
                                     }
                                 }
