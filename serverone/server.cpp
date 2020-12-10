@@ -27,7 +27,7 @@ struct server
                                 [](sess_type s)
                                 {
                                     std::cout << "New connection request\n";
-                                    return s->socket().remote_endpoint().address().is_loopback();
+                                    return true;
                                 },
                                 [this](queue_type& queue)
                                 {
@@ -142,6 +142,12 @@ private:
 
                                     std::cout << std::string(s1)
                                               << s->socket().remote_endpoint() << "\n";
+
+                                    // pretend something takes a long time
+                                    // for(int i=0; i < 100; ++i)
+                                    // {
+                                    //     std::this_thread::sleep_for(10ms);
+                                    // }
 
                                     auto r = std::make_shared<asionet::message<MsgTypes>>(m.m_header);
                                     *r << m_intf->statistics();
