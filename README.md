@@ -17,11 +17,13 @@ Written in C++17 Requires VS2019 (with or without clang toolchain)
 To configure the solution (assuming conand and premake5 are on the path):
 
 > \> mkdir build && cd build
+
 > \> conan install ..
 
 Then
 
 > \> cd ..
+
 > \> premake5 --scripts=build vs2019
 
 Once that is done you will have a solution named ASIO.sln, just open that up with VS2019
