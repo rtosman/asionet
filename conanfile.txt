@@ -1,0 +1,7 @@
+[requires]
+asio/1.18.1
+botan/2.17.3
+
+[generators]
+premake
+

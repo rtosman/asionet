@@ -1,15 +1,12 @@
 -- premake5.lua
-localIncludePrefix = "E:/Users/Rennie Allen/source/opensource"
-localLibPrefix = localIncludePrefix -- for the author these are equivalent
-localAsioPrefix = "E:/Users/Rennie Allen/source/include/asio-1.18.0"
+include("conanbuildinfo.premake.lua")
+
 workspace "ASIO"
    configurations { "Debug", "Release" }
-   includedirs { 
-      localAsioPrefix .. "/include",
-      "%{prj.location}/common",
-      "%{prj.location}/one",
-   }
-   links { "botan" }
+   includedirs { conan_includedirs, "common", "one" }
+   linkoptions { conan_exelinkflags }
+   libdirs { conan_libdirs }
+   links { conan_libs, "crypt32" }
 
    language "C++"
    cppdialect "C++17" 
@@ -19,23 +16,10 @@ workspace "ASIO"
       platforms { "Win32", "Win64" }
       buildoptions { "-Wno-undefined-internal", "-Wno-unused-private-field", "-Wno-unknown-attributes" }
 
-   filter "platforms:Win32"
-      includedirs {
-         localIncludePrefix .. "/include/botan-2/x86"
-      }
-      libdirs {
-         localLibPrefix .. "/lib/x86"
-      }
-      architecture "x32"
-  
-   filter "platforms:Win64"
-      includedirs {
-         localIncludePrefix .. "/include/botan-2/x64"
-      }
-      libdirs {
-         localLibPrefix .. "/lib/x64"
-      }
-      architecture "x64"
+   filter "system:linux"
+      toolset('clang')
+      platforms { "linux-x32", "linux-x64" }
+      buildoptions { "-Wno-undefined-internal", "-Wno-unused-private-field", "-Wno-unknown-attributes" }
 
 project "ServerOne"
    kind "ConsoleApp"
