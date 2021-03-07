@@ -27,35 +27,5 @@ MsgTypes clamp_msg_types(MsgTypes id)
     return MsgTypes::Invalid;
 }
 
-// following is the support for the authentication challenge
-struct onetx
-{
-    uint8_t x;
-    uint8_t y;
-};
-
-std::ostream& operator<<(std::ostream& o, onetx const& p)
-{  
-    return o << (int)p.x << ", " << (int)p.y;  
-}
-
-constexpr onetx genslider(std::size_t curr, std::size_t total)
-{
-    return {(uint8_t)(curr*13/(total-1)), (uint8_t)(curr*19/total)};
-}
-
-template<typename T, int N>
-uint8_t slide(uint8_t in, std::array<T,N> arr)
-{
-    for (auto p: arr)
-    {
-        if (p.x == (in&0xf))
-        {
-            return p.y;
-        }
-    }
-
-    return 0;
-}
 
 #endif

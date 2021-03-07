@@ -2,7 +2,7 @@ from conans import ConanFile, tools
 
 class ASIOnetConan(ConanFile):
     name = "ASIOnet"
-    version = "1.0"
+    version = "1.2"
     description = "TCP networking framework built on top of asio"
     topics = ("network", "tcp", "async", "parallel")
     exports_sources = "../common/*"
@@ -11,5 +11,4 @@ class ASIOnetConan(ConanFile):
     requires = ("asio/1.18.1", "botan/2.17.3")
 
     def package(self):
-        self.copy("*.hpp", dst="include")
-
+        self.copy("*.hpp", dst="include", excludes="one.hpp")

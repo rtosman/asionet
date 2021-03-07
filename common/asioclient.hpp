@@ -5,7 +5,6 @@
 #include "asiomsg.hpp"
 #include "asioutil.hpp"
 #include "asiosession.hpp"
-#include "one.hpp"
 #include <map>
 #include <cassert>
 

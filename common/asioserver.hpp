@@ -294,7 +294,6 @@ namespace asionet
                          const asio::error_code& ec,
                          size_t bytes_transferred)
         {
-//            std::scoped_lock<std::mutex> lock(m_msg_mutex);
             peak_messages<T,Encrypt>(m_stats, m_msgs);
             ++m_stats.count_.msgs_rx_good_;
 
