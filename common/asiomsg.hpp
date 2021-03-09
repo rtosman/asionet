@@ -101,10 +101,23 @@ namespace asionet
         friend message<T>& operator<<(message<T>& msg, const char* data)
         {
             size_t i = msg.m_body.size();
- 
-            msg.m_body.resize(msg.m_body.size() + strlen(data)+1);
+
+            msg.m_body.resize(i + strlen(data) + 1);
 
             std::memcpy(msg.m_body.data() + i, data, strlen(data));
+
+            msg.m_header.m_size = msg.m_body.size();
+
+            return msg;
+        }
+
+        friend message<T>& operator<<(message<T>& msg, std::string& data)
+        {
+            size_t i = msg.m_body.size();
+
+            msg.m_body.resize(i + data.size() + 1);
+
+            std::memcpy(msg.m_body.data() + i, data.data(), data.size() + 1);
 
             msg.m_header.m_size = msg.m_body.size();
 
@@ -123,6 +136,23 @@ namespace asionet
             msg.m_body.resize(i);
 
             msg.m_header.m_size = msg.m_body.size();
+
+            return msg;
+        }
+
+        friend message<T>& operator>>(message<T>& msg, std::string& data)
+        {
+            size_t len = std::strlen((char*)msg.m_body.data()) + 1;
+            size_t i = msg.m_body.size() - len;
+            char    buf[len];
+
+            std::memcpy(buf, msg.m_body.data(), len);
+
+            msg.m_body.resize(i);
+
+            msg.m_header.m_size = msg.m_body.size();
+
+            data = buf;
 
             return msg;
         }
