@@ -111,7 +111,7 @@ namespace asionet
             return msg;
         }
 
-        friend message<T>& operator<<(message<T>& msg, std::string& data)
+        friend message<T>& operator<<(message<T>& msg, const std::string& data)
         {
             size_t i = msg.m_body.size();
 
