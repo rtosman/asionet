@@ -2,7 +2,7 @@ from conans import ConanFile, tools
 
 class ASIOnetConan(ConanFile):
     name = "ASIOnet"
-    version = "1.2"
+    version = "1.3"
     description = "TCP networking framework built on top of asio"
     topics = ("network", "tcp", "async", "parallel")
     exports_sources = "../common/*"
