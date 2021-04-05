@@ -144,7 +144,7 @@ namespace asionet
         {
             size_t len = std::strlen((char*)msg.m_body.data()) + 1;
             size_t i = msg.m_body.size() - len;
-            char    buf[len];
+            char*    buf=static_cast<char*>(alloca(len));
 
             std::memcpy(buf, msg.m_body.data(), len);
 
