@@ -11,10 +11,7 @@ namespace asionet
 {
   namespace err
   {
-    namespace
-    {
-      extern const char* strenc_runtime_error;
-    }
+    extern const char* strenc_runtime_error;
   }
 
   namespace detail

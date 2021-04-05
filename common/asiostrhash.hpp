@@ -10,11 +10,8 @@ namespace asionet
 {
   namespace err
   {
-    namespace
-    {
-      extern const char* fnv1_runtime_error;
-      extern const char* fnv1a_runtime_error;
-    }
+    extern const char* fnv1_runtime_error;
+    extern const char* fnv1a_runtime_error;
   }
   namespace detail
   {

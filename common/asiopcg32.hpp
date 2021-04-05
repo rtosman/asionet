@@ -15,10 +15,7 @@ namespace asionet
 {
   namespace err
   {
-    namespace
-    {
       extern const char* pcg32_runtime_error;
-    }
   }
 
   namespace pcg
